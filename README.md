@@ -1,11 +1,13 @@
 # PeopleBase
 
-A focused Flask and SQLAlchemy application for managing structured employee records.
+A focused Flask and SQLAlchemy people operations workspace for managing, finding, and exporting structured employee records.
 
 ## What it demonstrates
 
 - Application-factory architecture and environment-based configuration
 - Create, read, update, and delete workflows
+- Name and position search with role-based filtering
+- Workforce summaries and filtered CSV exports
 - Server-side validation with useful error states
 - POST-only destructive actions
 - Responsive, accessible server-rendered templates
@@ -14,8 +16,8 @@ A focused Flask and SQLAlchemy application for managing structured employee reco
 ## Run locally
 
 ```bash
-git clone https://github.com/patrickking67/python-database.git
-cd python-database
+git clone https://github.com/patrickking67/peoplebase.git
+cd peoplebase
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt

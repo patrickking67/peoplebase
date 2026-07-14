@@ -133,6 +133,58 @@ h1 { max-width: 850px; margin: 0; font-size: clamp(62px, 8vw, 122px); line-heigh
 .directory-heading h1, .form-layout h1 { font-size: clamp(58px, 7vw, 100px); }
 .directory-heading p:last-child, .form-layout header > p:last-child { color: var(--muted); }
 
+.directory-tools {
+    margin: 0 clamp(20px, 5vw, 72px) 34px;
+    padding: 24px;
+    border: 1px solid var(--ink);
+    background: #faf8f2;
+}
+
+.filter-form {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.4fr) minmax(160px, .8fr) auto auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.filter-form label {
+    display: none;
+}
+
+.filter-form input,
+.filter-form select {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    color: var(--ink);
+    background: white;
+    font: inherit;
+}
+
+.filter-form .button { min-height: 44px; }
+.filter-form > a { padding: 12px 6px; font-size: 12px; }
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 24px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+}
+
+.summary-grid p {
+    margin: 0;
+    padding: 22px 18px;
+    border-right: 1px solid var(--line);
+}
+
+.summary-grid p:last-child { border-right: 0; }
+.summary-grid strong { display: block; font-family: Georgia, serif; font-size: clamp(28px, 3vw, 44px); font-weight: 400; letter-spacing: -.05em; }
+.summary-grid span { display: block; margin-top: 4px; color: var(--muted); text-transform: uppercase; font-size: 9px; font-weight: 750; letter-spacing: .12em; }
+.export-link { display: inline-block; margin-top: 18px; font-size: 12px; font-weight: 700; }
+
 .table-wrap { padding: 0 clamp(20px, 5vw, 72px) 100px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; border-top: 1px solid var(--ink); }
 th, td { padding: 21px 16px; border-bottom: 1px solid var(--line); text-align: left; }
@@ -173,6 +225,10 @@ footer { min-height: 72px; display: flex; justify-content: space-between; align-
     .feature-grid article { min-height: 250px; border-right: 0; border-bottom: 1px solid #41413d; }
     .directory-heading, .form-layout { grid-template-columns: 1fr; align-items: start; }
     .directory-heading .button { width: fit-content; }
+    .filter-form { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: 1fr; }
+    .summary-grid p { border-right: 0; border-bottom: 1px solid var(--line); }
+    .summary-grid p:last-child { border-bottom: 0; }
     .table-wrap { padding-right: 0; padding-left: 0; }
     th, td { min-width: 150px; padding: 18px 20px; }
     .row-actions { min-width: 120px; }

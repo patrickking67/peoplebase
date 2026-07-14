@@ -2,8 +2,29 @@
 {% block title %}Employee directory · PeopleBase{% endblock %}
 {% block content %}
 <section class="directory-heading">
-    <div><p class="eyebrow">Employee records</p><h1>Directory</h1><p>{{ employees|length }} record{% if employees|length != 1 %}s{% endif %}, sorted by name.</p></div>
+    <div><p class="eyebrow">People operations</p><h1>Directory</h1><p>Search, filter, review, and export workforce records.</p></div>
     <a class="button" href="{{ url_for('add_employee') }}">Add employee</a>
+</section>
+<section class="directory-tools" aria-label="Directory controls and summary">
+    <form class="filter-form" method="get" action="{{ url_for('view_employees') }}">
+        <label for="q">Search</label>
+        <input id="q" name="q" type="search" value="{{ search }}" placeholder="Name or position">
+        <label for="position">Position</label>
+        <select id="position" name="position">
+            <option value="">All positions</option>
+            {% for position in positions %}
+            <option value="{{ position }}"{% if position == selected_position %} selected{% endif %}>{{ position }}</option>
+            {% endfor %}
+        </select>
+        <button class="button" type="submit">Apply filters</button>
+        {% if search or selected_position %}<a href="{{ url_for('view_employees') }}">Clear</a>{% endif %}
+    </form>
+    <div class="summary-grid">
+        <p><strong>{{ employees|length }}</strong><span>Matching records</span></p>
+        <p><strong>${{ "{:,.0f}".format(total_payroll) }}</strong><span>Annual payroll</span></p>
+        <p><strong>${{ "{:,.0f}".format(average_salary) }}</strong><span>Average salary</span></p>
+    </div>
+    <a class="export-link" href="{{ url_for('export_employees', q=search, position=selected_position) }}">Export this view as CSV →</a>
 </section>
 {% if employees %}
 <div class="table-wrap">
@@ -27,6 +48,6 @@
     </table>
 </div>
 {% else %}
-<section class="empty-state"><span>0 records</span><h2>Your directory is ready.</h2><p>Add the first employee to begin.</p><a class="button" href="{{ url_for('add_employee') }}">Add employee</a></section>
+<section class="empty-state"><span>0 matches</span><h2>No records found.</h2><p>Clear the filters or add a new employee.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
 {% endif %}
 {% endblock %}

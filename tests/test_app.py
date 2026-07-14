@@ -19,6 +19,32 @@ def test_directory_lists_employees(client):
     assert b"Engineer" in response.data
 
 
+def test_directory_searches_names_and_positions(client):
+    name_response = client.get("/employees?q=ada")
+    missing_response = client.get("/employees?q=designer")
+
+    assert b"Ada Lovelace" in name_response.data
+    assert b"No records found" in missing_response.data
+
+
+def test_directory_filters_by_position(client):
+    response = client.get("/employees?position=Engineer")
+
+    assert response.status_code == 200
+    assert b"Ada Lovelace" in response.data
+    assert b"Annual payroll" in response.data
+
+
+def test_csv_export_uses_current_filters(client):
+    response = client.get("/employees.csv?q=ada")
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    assert "peoplebase-employees.csv" in response.headers["Content-Disposition"]
+    assert b"id,name,position,annual_salary" in response.data
+    assert b"Ada Lovelace,Engineer" in response.data
+
+
 def test_employee_crud_flow(client, app):
     create_response = client.post(
         "/employees/new",

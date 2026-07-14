@@ -1,7 +1,9 @@
 import os
+import csv
+from io import StringIO
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, make_response, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 
 
@@ -42,8 +44,42 @@ def create_app(test_config=None):
 
     @app.get("/employees")
     def view_employees():
-        employees = db.session.scalars(db.select(Employee).order_by(Employee.name)).all()
-        return render_template("view_employees.html", employees=employees)
+        search = request.args.get("q", "").strip()
+        position = request.args.get("position", "").strip()
+        statement = filtered_employee_query(search, position)
+        employees = db.session.scalars(statement.order_by(Employee.name)).all()
+        positions = db.session.scalars(
+            db.select(Employee.position).distinct().order_by(Employee.position)
+        ).all()
+        total_payroll = sum((employee.salary for employee in employees), start=0)
+        average_salary = total_payroll / len(employees) if employees else 0
+        return render_template(
+            "view_employees.html",
+            employees=employees,
+            positions=positions,
+            search=search,
+            selected_position=position,
+            total_payroll=total_payroll,
+            average_salary=average_salary,
+        )
+
+    @app.get("/employees.csv")
+    def export_employees():
+        search = request.args.get("q", "").strip()
+        position = request.args.get("position", "").strip()
+        employees = db.session.scalars(
+            filtered_employee_query(search, position).order_by(Employee.name)
+        ).all()
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "name", "position", "annual_salary"])
+        for employee in employees:
+            writer.writerow([employee.id, employee.name, employee.position, employee.salary])
+
+        response = make_response(output.getvalue())
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
+        response.headers["Content-Disposition"] = "attachment; filename=peoplebase-employees.csv"
+        return response
 
     @app.route("/employees/new", methods=["GET", "POST"])
     def add_employee():
@@ -114,6 +150,18 @@ def validate_employee(form):
         return None, "Salary must be between 0 and 999,999,999.99."
 
     return {"name": name, "position": position, "salary": salary}, None
+
+
+def filtered_employee_query(search, position):
+    statement = db.select(Employee)
+    if search:
+        pattern = f"%{search}%"
+        statement = statement.where(
+            db.or_(Employee.name.ilike(pattern), Employee.position.ilike(pattern))
+        )
+    if position:
+        statement = statement.where(Employee.position == position)
+    return statement
 
 
 app = create_app()
