@@ -1,6 +1,23 @@
+<div align="center">
+
 # PeopleBase
 
-A focused Flask and SQLAlchemy people operations workspace for managing, finding, and exporting structured employee records.
+**Employee data, clearly managed.**
+
+A focused Flask and SQLAlchemy people operations workspace for managing, finding,
+and exporting structured employee records.
+
+![Python](https://img.shields.io/badge/-Python%203.9+-3776AB?logo=python&logoColor=white&style=flat)
+![Flask](https://img.shields.io/badge/-Flask-000000?logo=flask&logoColor=white&style=flat)
+![SQLAlchemy](https://img.shields.io/badge/-SQLAlchemy-D71F00?logo=sqlalchemy&logoColor=white&style=flat)
+![Tests](https://img.shields.io/badge/tests-10%20passing-3f6f4a?style=flat)
+![License](https://img.shields.io/badge/license-MIT-blue?style=flat)
+
+**[patrickking67.github.io/peoplebase](https://patrickking67.github.io/peoplebase/)**
+
+</div>
+
+---
 
 ## What it demonstrates
 

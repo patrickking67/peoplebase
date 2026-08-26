@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PeopleBase — Employee data, clearly managed</title>
+<meta name="description" content="A focused Flask and SQLAlchemy people operations workspace: validated CRUD, search and filtering, workforce summaries, and filtered CSV exports.">
+<meta property="og:title" content="PeopleBase">
+<meta property="og:description" content="A focused Flask and SQLAlchemy people operations workspace — validated CRUD, search, workforce summaries, and CSV export.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://patrickking67.github.io/peoplebase/">
+<meta property="og:image" content="https://patrickking67.github.io/peoplebase/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👥</text></svg>">
+<style>
+  :root{
+    --bg:#faf8f2; --surface:#ffffff; --surface-2:#f4f1e8; --line:#c8c7bf;
+    --text:#41413d; --muted:#61625c; --accent:#3f6f4a; --chip:#d4ff55;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#1a1a17; --surface:#232320; --surface-2:#2b2b27; --line:#3d3d38;
+      --text:#eceae2; --muted:#a9a89f; --accent:#a8d96f; --chip:#d4ff55;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+       line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:0 24px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 12px;font-weight:600}
+  header{padding:76px 0 52px}
+  .hero{display:grid;grid-template-columns:1.6fr 1fr;gap:36px;align-items:start}
+  @media(max-width:700px){.hero{grid-template-columns:1fr}}
+  h1{font-size:clamp(32px,5.2vw,48px);line-height:1.12;margin:0 0 16px;letter-spacing:-.025em}
+  .lede{font-size:clamp(16px,2.1vw,18.5px);color:var(--muted);margin:0 0 26px}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .button{display:inline-block;padding:10px 20px;border-radius:4px;background:var(--text);
+          color:var(--bg);text-decoration:none;font-weight:500;font-size:15px;
+          border:1px solid var(--text);transition:opacity .15s}
+  .button:hover{opacity:.85}
+  .button.ghost{background:transparent;color:var(--text);border-color:var(--line)}
+  .button.ghost:hover{border-color:var(--text);opacity:1}
+  .stat-card{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+             padding:22px;display:flex;flex-direction:column;gap:4px}
+  .stat-card span{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .stat-card strong{font-size:40px;line-height:1;letter-spacing:-.03em}
+  .stat-card p{margin:10px 0 0;font-size:13.5px;color:var(--muted)}
+  .stat-card code{font-family:var(--mono);font-size:12px;background:var(--surface-2);
+                  padding:1px 5px;border-radius:3px}
+  section{padding:44px 0;border-top:1px solid var(--line)}
+  h2{font-size:20px;margin:0 0 6px;letter-spacing:-.01em}
+  h2 + .sub{color:var(--muted);margin:0 0 24px;font-size:15px}
+  .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+  .feature-grid article{background:var(--surface);border:1px solid var(--line);
+                        border-radius:6px;padding:20px}
+  .feature-grid article > span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .feature-grid h3{margin:8px 0 6px;font-size:16px}
+  .feature-grid p{margin:0;font-size:14.5px;color:var(--muted)}
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;
+      overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;margin:0}
+  .cmt{color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;display:block;overflow-x:auto}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  td code{font-family:var(--mono);font-size:12.5px}
+  .note{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:4px;padding:14px 16px;font-size:14.5px;color:var(--muted)}
+  .note strong{color:var(--text)}
+  footer{padding:32px 0 56px;color:var(--muted);font-size:14px;
+         display:flex;flex-wrap:wrap;gap:8px 20px}
+  footer a{color:var(--muted)}
+  a{color:var(--accent)}
+  a:focus-visible,.button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hero">
+    <div>
+      <p class="eyebrow">Structured people data</p>
+      <h1>A clear view of your team.</h1>
+      <p class="lede">
+        PeopleBase is a focused Flask and SQLAlchemy people operations workspace —
+        validated employee records, dependable CRUD workflows, workforce summaries,
+        and filtered CSV exports, on a clean application-factory architecture.
+      </p>
+      <div class="actions">
+        <a class="button" href="https://github.com/patrickking67/peoplebase">View on GitHub</a>
+        <a class="button ghost" href="https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md">Architecture</a>
+      </div>
+    </div>
+    <aside class="stat-card" aria-label="Project summary">
+      <span>Test suite</span>
+      <strong>10</strong>
+      <p>Isolated integration tests over an application factory. Stored in SQLite by
+         default, ready for a production database through <code>DATABASE_URL</code>.</p>
+    </aside>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="sub">A directory you can search, filter, summarise, and export.</p>
+    <div class="feature-grid">
+      <article>
+        <span>01</span><h3>Validated</h3>
+        <p>Required fields, bounded values, and useful error states protect data quality
+           on every write.</p>
+      </article>
+      <article>
+        <span>02</span><h3>Searchable</h3>
+        <p>Name and position search with role-based filtering, plus live payroll and
+           average-salary summaries over the matching set.</p>
+      </article>
+      <article>
+        <span>03</span><h3>Testable</h3>
+        <p>An application factory and isolated database configuration keep behaviour
+           predictable across supported Python versions.</p>
+      </article>
+      <article>
+        <span>04</span><h3>Portable</h3>
+        <p>SQLite works out of the box; environment configuration takes it to a
+           production database without code changes.</p>
+      </article>
+      <article>
+        <span>05</span><h3>Exportable</h3>
+        <p>CSV export honours the active filters, so what you see is what you get.</p>
+      </article>
+      <article>
+        <span>06</span><h3>Careful</h3>
+        <p>Destructive actions are POST-only, and templates are server-rendered,
+           responsive, and accessible.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Run it locally</h2>
+    <p class="sub">Python 3.9 or newer.</p>
+    <pre><code>git clone https://github.com/patrickking67/peoplebase.git
+cd peoplebase
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -r requirements-dev.txt
+flask --app app run --debug        <span class="cmt"># http://127.0.0.1:5000</span>
+
+pytest -q                          <span class="cmt"># 10 passed</span></code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Configuration</h2>
+    <p class="sub">Environment variables, all with working defaults.</p>
+    <table>
+      <thead><tr><th>Variable</th><th>Purpose</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td><code>DATABASE_URL</code></td><td>SQLAlchemy connection string</td><td>Local SQLite</td></tr>
+        <tr><td><code>SECRET_KEY</code></td><td>Session and flash-message signing</td><td>Development-only value</td></tr>
+        <tr><td><code>FLASK_DEBUG</code></td><td>Enables debug mode when set to <code>1</code></td><td>Disabled</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:20px 0 0"><span class="note"><strong>Before any public deployment:</strong>
+      set a unique <code>SECRET_KEY</code> and add authentication. PeopleBase ships no
+      auth layer by design.</span></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap" style="display:flex;flex-wrap:wrap;gap:8px 20px">
+    <span>MIT licensed</span>
+    <span>Flask · SQLAlchemy · SQLite</span>
+    <a href="https://github.com/patrickking67/peoplebase">github.com/patrickking67/peoplebase</a>
+  </div>
+</footer>
+</body>
+</html>
