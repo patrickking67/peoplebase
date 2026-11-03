@@ -1,0 +1,10 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(pytest -q)",
+			"Bash(.venv/bin/pytest -q)",
+			"Bash(python scripts/check-ai-config.py)",
+			"Bash(.venv/bin/python scripts/check-ai-config.py)"
+		]
+	}
+}

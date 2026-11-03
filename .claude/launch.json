@@ -1,0 +1,1 @@
+{"version":"0.0.1","configurations":[{"name":"peoplebase","runtimeExecutable":".venv/bin/flask","runtimeArgs":["--app","app","run","--debug","--port","5001"],"port":5001}]}
