@@ -20,6 +20,7 @@ from flask import (
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.exceptions import HTTPException, InternalServerError
 
 
 db = SQLAlchemy()
@@ -108,6 +109,16 @@ def create_app(test_config=None):
         for header, value in SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)
         return response
+
+    @app.errorhandler(HTTPException)
+    def handle_http_error(error):
+        return render_template("error.html", error=error), error.code
+
+    @app.errorhandler(InternalServerError)
+    def handle_server_error(error):
+        # Never show exception details; the traceback goes to the server log.
+        db.session.rollback()
+        return render_template("error.html", error=InternalServerError()), 500
 
     @app.get("/")
     def home():

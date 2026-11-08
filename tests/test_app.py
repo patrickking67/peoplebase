@@ -131,3 +131,35 @@ def test_user_input_is_html_escaped(client, add_employees):
 
     assert b"<script>alert(1)</script>" not in response.data
     assert b"&lt;script&gt;alert(1)&lt;/script&gt;" in response.data
+
+
+@pytest.mark.parametrize(
+    "method,path,status,text",
+    [
+        ("get", "/does-not-exist", 404, b"Not Found"),
+        ("get", "/employees/999/edit", 404, b"Not Found"),
+        ("get", "/employees/1/delete", 405, b"Method Not Allowed"),
+        ("post", "/employees/new", 400, b"did not come from PeopleBase"),
+    ],
+)
+def test_error_pages_use_the_app_layout(client, method, path, status, text):
+    response = getattr(client, method)(path)
+
+    assert response.status_code == status
+    assert text in response.data
+    assert b"Back to PeopleBase" in response.data
+    assert b'class="site-header"' in response.data
+
+
+def test_unexpected_errors_show_a_generic_page(app):
+    app.config["PROPAGATE_EXCEPTIONS"] = False
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("secret internal detail")
+
+    response = app.test_client().get("/boom")
+
+    assert response.status_code == 500
+    assert b"Internal Server Error" in response.data
+    assert b"secret internal detail" not in response.data

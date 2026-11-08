@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ error.code }} {{ error.name }} · PeopleBase{% endblock %}
+{% block content %}
+<section class="empty-state error-state" aria-labelledby="error-title">
+    <span>Error {{ error.code }}</span>
+    <h1 id="error-title">{{ error.name }}</h1>
+    <p>{{ error.description }}</p>
+    <a class="button" href="{{ url_for('home') }}">Back to PeopleBase</a>
+</section>
+{% endblock %}
