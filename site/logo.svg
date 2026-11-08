@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 312 64" role="img" aria-labelledby="t">
+  <title id="t">PeopleBase</title>
+  <style>
+    .word { fill: #161a33; font-family: "Avenir Next", Avenir, "Segoe UI", Seravek, Ubuntu, "Helvetica Neue", Arial, sans-serif; font-size: 38px; font-weight: 600; letter-spacing: -0.5px; }
+    .base { fill: #2546f0; }
+    @media (prefers-color-scheme: dark) {
+      .word { fill: #e9ecf8; }
+      .base { fill: #8ea0ff; }
+    }
+  </style>
+  <rect width="64" height="64" rx="16" fill="#2546f0"/>
+  <path d="M32 26v8M18 34h28M18 34v6M46 34v6" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="19" r="7" fill="#f2b233"/>
+  <circle cx="18" cy="45" r="6" fill="#ffffff"/>
+  <circle cx="46" cy="45" r="6" fill="#ffffff"/>
+  <text x="80" y="45" class="word">People<tspan class="base">Base</tspan></text>
+</svg>

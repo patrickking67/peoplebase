@@ -3,180 +3,228 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PeopleBase — Employee data, clearly managed</title>
-<meta name="description" content="A focused Flask and SQLAlchemy people operations workspace: validated CRUD, search and filtering, workforce summaries, and filtered CSV exports.">
+<title>PeopleBase: a small HR system you can read in one sitting</title>
+<meta name="description" content="PeopleBase is an open source Flask and SQLAlchemy HR system: employee records, departments, reporting lines, compensation history, time off with manager approval, and a people dashboard.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2546f0">
+<link rel="canonical" href="https://patrickking67.github.io/peoplebase/">
 <meta property="og:title" content="PeopleBase">
-<meta property="og:description" content="A focused Flask and SQLAlchemy people operations workspace — validated CRUD, search, workforce summaries, and CSV export.">
+<meta property="og:description" content="A small HR system you can read in one sitting: records, reporting lines, pay history and time off, in Flask and SQLAlchemy.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://patrickking67.github.io/peoplebase/">
 <meta property="og:image" content="https://patrickking67.github.io/peoplebase/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The PeopleBase logo next to a small org chart and the line: a small HR system you can read in one sitting.">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👥</text></svg>">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="alternate" type="text/plain" href="llms.txt" title="llms.txt">
 <style>
-  :root{
-    --bg:#faf8f2; --surface:#ffffff; --surface-2:#f4f1e8; --line:#c8c7bf;
-    --text:#41413d; --muted:#61625c; --accent:#3f6f4a; --chip:#d4ff55;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
-    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  :root {
+    --paper: #f2f4f8; --surface: #ffffff; --ink: #161a33; --muted: #4f5675;
+    --line: #d5dae8; --line-strong: #aeb6cf; --brand: #2546f0; --brand-ink: #ffffff;
+    --brand-soft: #e6eafe; --marigold: #f2b233; --marigold-soft: #fdf1d6;
+    --font: "Avenir Next", Avenir, "Segoe UI Variable Text", "Segoe UI", Seravek, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --gutter: clamp(16px, 5vw, 56px);
+    color-scheme: light;
   }
-  @media (prefers-color-scheme:dark){
-    :root{
-      --bg:#1a1a17; --surface:#232320; --surface-2:#2b2b27; --line:#3d3d38;
-      --text:#eceae2; --muted:#a9a89f; --accent:#a8d96f; --chip:#d4ff55;
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0e1124; --surface: #161a33; --ink: #e9ecf8; --muted: #a6adcb;
+      --line: #2a3052; --line-strong: #444c78; --brand: #8ea0ff; --brand-ink: #0e1124;
+      --brand-soft: #1f2650; --marigold-soft: #3a2f12;
+      color-scheme: dark;
     }
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-       line-height:1.6;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:880px;margin:0 auto;padding:0 24px}
-  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
-           color:var(--muted);margin:0 0 12px;font-weight:600}
-  header{padding:76px 0 52px}
-  .hero{display:grid;grid-template-columns:1.6fr 1fr;gap:36px;align-items:start}
-  @media(max-width:700px){.hero{grid-template-columns:1fr}}
-  h1{font-size:clamp(32px,5.2vw,48px);line-height:1.12;margin:0 0 16px;letter-spacing:-.025em}
-  .lede{font-size:clamp(16px,2.1vw,18.5px);color:var(--muted);margin:0 0 26px}
-  .actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-  .button{display:inline-block;padding:10px 20px;border-radius:4px;background:var(--text);
-          color:var(--bg);text-decoration:none;font-weight:500;font-size:15px;
-          border:1px solid var(--text);transition:opacity .15s}
-  .button:hover{opacity:.85}
-  .button.ghost{background:transparent;color:var(--text);border-color:var(--line)}
-  .button.ghost:hover{border-color:var(--text);opacity:1}
-  .stat-card{background:var(--surface);border:1px solid var(--line);border-radius:6px;
-             padding:22px;display:flex;flex-direction:column;gap:4px}
-  .stat-card span{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
-  .stat-card strong{font-size:40px;line-height:1;letter-spacing:-.03em}
-  .stat-card p{margin:10px 0 0;font-size:13.5px;color:var(--muted)}
-  .stat-card code{font-family:var(--mono);font-size:12px;background:var(--surface-2);
-                  padding:1px 5px;border-radius:3px}
-  section{padding:44px 0;border-top:1px solid var(--line)}
-  h2{font-size:20px;margin:0 0 6px;letter-spacing:-.01em}
-  h2 + .sub{color:var(--muted);margin:0 0 24px;font-size:15px}
-  .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
-  .feature-grid article{background:var(--surface);border:1px solid var(--line);
-                        border-radius:6px;padding:20px}
-  .feature-grid article > span{font-family:var(--mono);font-size:12px;color:var(--muted)}
-  .feature-grid h3{margin:8px 0 6px;font-size:16px}
-  .feature-grid p{margin:0;font-size:14.5px;color:var(--muted)}
-  pre{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;
-      overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;margin:0}
-  .cmt{color:var(--muted)}
-  table{width:100%;border-collapse:collapse;font-size:14.5px;display:block;overflow-x:auto}
-  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
-  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
-  td code{font-family:var(--mono);font-size:12.5px}
-  .note{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
-        border-radius:4px;padding:14px 16px;font-size:14.5px;color:var(--muted)}
-  .note strong{color:var(--text)}
-  footer{padding:32px 0 56px;color:var(--muted);font-size:14px;
-         display:flex;flex-wrap:wrap;gap:8px 20px}
-  footer a{color:var(--muted)}
-  a{color:var(--accent)}
-  a:focus-visible,.button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: var(--paper); font-family: var(--font); font-size: 1.0625rem; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--brand); text-underline-offset: .18em; }
+  :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; border-radius: 4px; }
+  h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+  p { margin: 0; }
+  .skip-link { position: absolute; left: var(--gutter); top: -100px; padding: 8px 12px; color: var(--brand-ink); background: var(--brand); border-radius: 8px; }
+  .skip-link:focus { top: 12px; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 var(--gutter); }
+
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 22px; padding-bottom: 22px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 1.35rem; font-weight: 600; letter-spacing: -.02em; }
+  .brand svg { width: 36px; height: 36px; }
+  .brand span span { color: var(--brand); }
+  .top nav { display: flex; gap: 20px; font-size: .9375rem; }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 48px; padding-bottom: 64px; }
+  .hero h1 { max-width: 13ch; font-size: clamp(2.5rem, 1.4rem + 4.6vw, 4.75rem); letter-spacing: -.035em; line-height: 1.02; }
+  .lede { max-width: 56ch; margin-top: 22px; color: var(--muted); font-size: clamp(1.125rem, 1rem + .5vw, 1.3rem); line-height: 1.5; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .button { display: inline-flex; align-items: center; min-height: 46px; padding: 10px 20px; color: var(--brand-ink); background: var(--brand); border: 1px solid var(--brand); border-radius: 8px; font-weight: 600; font-size: .9375rem; text-decoration: none; }
+  .button:hover { filter: brightness(1.08); }
+  .button-quiet { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
+  .button-quiet:hover { filter: none; background: var(--paper); }
+
+  .shot { margin: 0; }
+  .shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line-strong); border-radius: 14px; background: #0e1124; }
+  .shot figcaption { margin-top: 12px; color: var(--muted); font-size: .9375rem; }
+
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  .section-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 62ch; margin-bottom: 36px; }
+  .section-head h2 { font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem); }
+  .section-head p { color: var(--muted); font-size: 1.125rem; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0 40px; margin: 0; }
+  .features div { padding: 20px 0; border-top: 1px solid var(--line); }
+  .features dt { font-weight: 600; font-size: 1.15rem; }
+  .features dd { margin: 6px 0 0; color: var(--muted); }
+
+  .proof { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
+  .count { font-size: clamp(4rem, 2.5rem + 6vw, 7.5rem); font-weight: 600; letter-spacing: -.05em; line-height: .9; font-variant-numeric: tabular-nums; }
+  .count-label { margin-top: 12px; color: var(--muted); font-size: 1.125rem; max-width: 32ch; }
+  .checks { margin: 0; padding: 0; list-style: none; }
+  .checks li { position: relative; padding: 14px 0 14px 30px; border-bottom: 1px solid var(--line); }
+  .checks li:first-child { padding-top: 0; }
+  .checks li:first-child::before { top: 6px; }
+  .checks li::before { content: ""; position: absolute; left: 0; top: 20px; width: 14px; height: 14px; border-radius: 50%; background: var(--brand-soft); box-shadow: inset 0 0 0 4px var(--brand); }
+  .checks strong { display: block; }
+  .checks span { color: var(--muted); }
+
+  pre { margin: 0; padding: 20px 22px; overflow-x: auto; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; font-family: var(--mono); font-size: .875rem; line-height: 1.7; }
+  .cmt { color: var(--muted); }
+  code { font-family: var(--mono); font-size: .9em; }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+  th, td { padding: 12px 16px 12px 0; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: .875rem; font-weight: 600; }
+  .note { margin-top: 28px; padding: 16px 20px; background: var(--marigold-soft); border-left: 4px solid var(--marigold); border-radius: 8px; max-width: 70ch; }
+
+  footer { padding: 32px 0 48px; color: var(--muted); border-top: 1px solid var(--line); font-size: .9375rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+
+  @media (min-width: 980px) {
+    .hero { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: center; padding-top: 64px; }
+  }
+  @media (max-width: 760px) {
+    .proof { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .top nav a:not(:last-child) { display: none; }
+    section { padding: 48px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap hero">
-    <div>
-      <p class="eyebrow">Structured people data</p>
-      <h1>A clear view of your team.</h1>
-      <p class="lede">
-        PeopleBase is a focused Flask and SQLAlchemy people operations workspace —
-        validated employee records, dependable CRUD workflows, workforce summaries,
-        and filtered CSV exports, on a clean application-factory architecture.
-      </p>
-      <div class="actions">
-        <a class="button" href="https://github.com/patrickking67/peoplebase">View on GitHub</a>
-        <a class="button ghost" href="https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md">Architecture</a>
-      </div>
-    </div>
-    <aside class="stat-card" aria-label="Project summary">
-      <span>Test suite</span>
-      <strong>66</strong>
-      <p>Isolated integration tests over an application factory. Stored in SQLite by
-         default, ready for a production database through <code>DATABASE_URL</code>.</p>
-    </aside>
-  </div>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="wrap top">
+  <a class="brand" href="./" aria-label="PeopleBase home">
+    <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <rect width="64" height="64" rx="16" fill="#2546f0"/>
+      <path d="M32 26v8M18 34h28M18 34v6M46 34v6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="32" cy="19" r="7" fill="#f2b233"/>
+      <circle cx="18" cy="45" r="6" fill="#fff"/>
+      <circle cx="46" cy="45" r="6" fill="#fff"/>
+    </svg>
+    <span>People<span>Base</span></span>
+  </a>
+  <nav aria-label="Project links">
+    <a href="#features">Features</a>
+    <a href="#run">Run it</a>
+    <a href="https://github.com/patrickking67/peoplebase">GitHub</a>
+  </nav>
 </header>
 
-<section>
-  <div class="wrap">
-    <h2>What it does</h2>
-    <p class="sub">A directory you can search, filter, summarise, and export.</p>
-    <div class="feature-grid">
-      <article>
-        <span>01</span><h3>Validated</h3>
-        <p>Required fields, bounded values, and useful error states protect data quality
-           on every write.</p>
-      </article>
-      <article>
-        <span>02</span><h3>Searchable</h3>
-        <p>Name and position search with role-based filtering, plus live payroll and
-           average-salary summaries over the matching set.</p>
-      </article>
-      <article>
-        <span>03</span><h3>Testable</h3>
-        <p>An application factory and isolated database configuration keep behaviour
-           predictable across supported Python versions.</p>
-      </article>
-      <article>
-        <span>04</span><h3>Portable</h3>
-        <p>SQLite works out of the box; environment configuration takes it to a
-           production database without code changes.</p>
-      </article>
-      <article>
-        <span>05</span><h3>Exportable</h3>
-        <p>CSV export honours the active filters, so what you see is what you get.</p>
-      </article>
-      <article>
-        <span>06</span><h3>Careful</h3>
-        <p>CSRF tokens on every form, POST-only deletes, and CSV cells neutralized
-           against formula injection. Templates are server-rendered and accessible.</p>
-      </article>
+<main id="main">
+  <div class="wrap hero">
+    <div>
+      <h1>A small HR system you can read in one sitting.</h1>
+      <p class="lede">PeopleBase keeps employee records, departments, reporting lines, pay history and time off for a small team. It is one Flask file, a handful of templates and a test suite that covers every rule.</p>
+      <div class="actions">
+        <a class="button" href="https://github.com/patrickking67/peoplebase">View the source</a>
+        <a class="button button-quiet" href="https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md">Read the architecture</a>
+      </div>
     </div>
+    <figure class="shot">
+      <img src="screenshot-dashboard.png" width="1200" height="750" alt="The PeopleBase dashboard in dark mode: 11 people at work across 5 departments, headcount bars by department, upcoming work anniversaries and who is out today." fetchpriority="high">
+      <figcaption>The dashboard, loaded with the built-in demo data.</figcaption>
+    </figure>
   </div>
-</section>
 
-<section>
-  <div class="wrap">
-    <h2>Run it locally</h2>
-    <p class="sub">Python 3.11 or newer.</p>
-    <pre><code>git clone https://github.com/patrickking67/peoplebase.git
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>What it keeps track of</h2>
+        <p>The everyday records a people lead at a small company needs, and nothing that needs a vendor contract.</p>
+      </div>
+      <dl class="features">
+        <div><dt>Employee records</dt><dd>Name, job title, salary, department, manager, start date and status: active, on leave or left.</dd></div>
+        <div><dt>Reporting lines</dt><dd>Pick a manager for anyone. Loops and self-management are refused, and the org chart draws the result.</dd></div>
+        <div><dt>Compensation history</dt><dd>Every title or salary change is kept with its effective date and reason, newest first on the profile.</dd></div>
+        <div><dt>Time off</dt><dd>Requests with dates, type and a note. The person's manager approves or denies; overlaps are caught.</dd></div>
+        <div><dt>Dashboard</dt><dd>Who is at work, headcount by department, anniversaries in the next 30 days and who is out today.</dd></div>
+        <div><dt>Directory and export</dt><dd>Search and filter by team, title and status, with payroll totals and a CSV of exactly what you see.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="details">
+    <div class="wrap proof">
+      <div>
+        <p class="count">176</p>
+        <p class="count-label">tests run on every pull request, on Python 3.11, 3.12 and 3.13.</p>
+      </div>
+      <ul class="checks">
+        <li><strong>Forms carry CSRF tokens</strong><span>Checked in constant time. Session cookies are HttpOnly and SameSite=Lax.</span></li>
+        <li><strong>A strict Content-Security-Policy</strong><span>No inline script anywhere, plus nosniff, frame denial and a 64 KiB request limit.</span></li>
+        <li><strong>Spreadsheet-safe CSV</strong><span>Cells that start with =, +, -, @, tab or carriage return are exported as text, not formulas.</span></li>
+        <li><strong>Validation at every boundary</strong><span>Plain-number salaries rounded to cents, real calendar dates, no control characters, ids the database can store.</span></li>
+        <li><strong>Upgrades in place</strong><span>Databases from earlier versions get the new columns on startup. No migration step to forget.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="run">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Run it locally</h2>
+        <p>Python 3.11 or newer. The demo data uses made-up people named "Example".</p>
+      </div>
+<pre><code>git clone https://github.com/patrickking67/peoplebase.git
 cd peoplebase
 python3 -m venv .venv &amp;&amp; source .venv/bin/activate
 pip install -r requirements-dev.txt
 export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-flask --app app run --debug        <span class="cmt"># http://127.0.0.1:5000</span>
+flask --app app seed-demo              <span class="cmt"># optional demo data</span>
+flask --app app run --debug            <span class="cmt"># http://127.0.0.1:5000</span>
 
-pytest -q                          <span class="cmt"># 66 passed</span></code></pre>
-  </div>
-</section>
+./scripts/check.sh                     <span class="cmt"># lint, tests and repo checks</span></code></pre>
+    </div>
+  </section>
 
-<section>
-  <div class="wrap">
-    <h2>Configuration</h2>
-    <p class="sub">Environment variables. Only <code>SECRET_KEY</code> is required.</p>
-    <table>
-      <thead><tr><th>Variable</th><th>Purpose</th><th>Default</th></tr></thead>
-      <tbody>
-        <tr><td><code>DATABASE_URL</code></td><td>SQLAlchemy connection string</td><td>Local SQLite</td></tr>
-        <tr><td><code>SECRET_KEY</code></td><td>Signs sessions, flash messages and CSRF tokens</td><td>Required, no default</td></tr>
-        <tr><td><code>FLASK_DEBUG</code></td><td>Enables debug mode when set to <code>1</code></td><td>Disabled</td></tr>
-      </tbody>
-    </table>
-    <p style="margin:20px 0 0"><span class="note"><strong>Before any public deployment:</strong>
-      use a long random <code>SECRET_KEY</code> and add authentication. PeopleBase ships no
-      auth layer by design.</span></p>
-  </div>
-</section>
+  <section id="config">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Configuration</h2>
+        <p>Environment variables. Only <code>SECRET_KEY</code> is required.</p>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">Variable</th><th scope="col">What it does</th><th scope="col">Default</th></tr></thead>
+          <tbody>
+            <tr><td><code>SECRET_KEY</code></td><td>Signs the session cookie, flash messages and CSRF tokens</td><td>None. The app will not start without it.</td></tr>
+            <tr><td><code>DATABASE_URL</code></td><td>Any SQLAlchemy database URL</td><td>SQLite at <code>instance/employees.db</code></td></tr>
+            <tr><td><code>FLASK_DEBUG</code></td><td>Turns on the debugger for <code>python app.py</code></td><td>Off</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note"><strong>PeopleBase has no sign-in.</strong> Anyone who can reach it can read and change every record. Keep it on a private network with demo data, or add authentication before it holds real people.</p>
+    </div>
+  </section>
+</main>
 
 <footer>
-  <div class="wrap" style="display:flex;flex-wrap:wrap;gap:8px 20px">
-    <span>MIT licensed</span>
-    <span>Flask · SQLAlchemy · SQLite</span>
-    <a href="https://github.com/patrickking67/peoplebase">github.com/patrickking67/peoplebase</a>
+  <div class="wrap">
+    <span>MIT licensed. Built with Flask and SQLAlchemy.</span>
+    <span><a href="https://github.com/patrickking67/peoplebase">github.com/patrickking67/peoplebase</a></span>
   </div>
 </footer>
 </body>
