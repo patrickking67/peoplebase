@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}Update {{ employee.name }} · PeopleBase{% endblock %}
+{% block title %}Update {{ employee.name }} | PeopleBase{% endblock %}
 {% block content %}
 <section class="form-layout">
-    <header><p class="eyebrow">Record {{ employee.id }}</p><h1>Update employee.</h1><p>Keep the directory accurate and current. A new title or salary is added to the compensation history with the effective date below.</p></header>
+    <header><h1>Edit {{ employee.name }}.</h1><p>Keep the directory accurate and current. A new title or salary is added to the compensation history with the effective date below.</p></header>
     <form method="post" action="{{ url_for('update_employee', employee_id=employee.id) }}">
         {% include '_employee_form.html' %}
         <fieldset>

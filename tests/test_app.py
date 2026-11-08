@@ -163,3 +163,19 @@ def test_unexpected_errors_show_a_generic_page(app):
     assert response.status_code == 500
     assert b"Internal Server Error" in response.data
     assert b"secret internal detail" not in response.data
+
+
+def test_layout_links_brand_assets_and_marks_current_page(client):
+    response = client.get("/employees")
+
+    assert b'href="/static/favicon.svg"' in response.data
+    assert b'href="/static/apple-touch-icon.png"' in response.data
+    assert b'<a href="/employees" aria-current="page">Directory</a>' in response.data
+    assert b'href="#main"' in response.data
+
+
+@pytest.mark.parametrize(
+    "path", ["/static/favicon.svg", "/static/favicon.ico", "/static/apple-touch-icon.png", "/static/brand/logo.svg"]
+)
+def test_brand_assets_are_served(client, path):
+    assert client.get(path).status_code == 200
