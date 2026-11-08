@@ -3,22 +3,45 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A focused Flask and SQLAlchemy employee data application.">
+    <meta name="description" content="PeopleBase: a small HR system for employee records, reporting lines, compensation history and time off.">
+    <meta name="color-scheme" content="light dark">
     <title>{% block title %}PeopleBase{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="32x32">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    {% set nav_items = [
+        ('home', 'Dashboard', ['home']),
+        ('view_employees', 'Directory', ['view_employees', 'employee_profile', 'update_employee', 'add_employee']),
+        ('org_chart', 'Org chart', ['org_chart']),
+        ('view_departments', 'Departments', ['view_departments', 'add_department']),
+        ('view_time_off', 'Time off', ['view_time_off', 'request_time_off']),
+    ] %}
     <header class="site-header">
-        <a class="brand" href="{{ url_for('home') }}">People<span>Base</span></a>
-        <nav aria-label="Primary navigation">
-            <a href="{{ url_for('view_employees') }}">Directory</a>
-            <a class="button button-small" href="{{ url_for('add_employee') }}">Add employee</a>
+        <a class="brand" href="{{ url_for('home') }}" aria-label="PeopleBase dashboard">
+            <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+                <rect width="64" height="64" rx="16" fill="#2546f0"/>
+                <path d="M32 26v8M18 34h28M18 34v6M46 34v6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="32" cy="19" r="7" fill="#f2b233"/>
+                <circle cx="18" cy="45" r="6" fill="#fff"/>
+                <circle cx="46" cy="45" r="6" fill="#fff"/>
+            </svg>
+            <span class="brand-word">People<span>Base</span></span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+            {% for endpoint, label, active in nav_items %}
+            <a href="{{ url_for(endpoint) }}"{% if request.endpoint in active %} aria-current="page"{% endif %}>{{ label }}</a>
+            {% endfor %}
         </nav>
     </header>
-    <main>
+    <main id="main" tabindex="-1">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="flash-stack" aria-live="polite">
+                <div class="flash-stack" role="status">
                     {% for category, message in messages %}
                         <p class="flash flash-{{ category }}">{{ message }}</p>
                     {% endfor %}
@@ -27,9 +50,9 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
-    <footer>
-        <span>Flask + SQLAlchemy</span>
-        <span>Patrick King</span>
+    <footer class="site-footer">
+        <p>PeopleBase has no sign-in. Keep it on a private network and use demo data only.</p>
+        <p><a href="https://github.com/patrickking67/peoplebase">Source on GitHub</a></p>
     </footer>
 </body>
 </html>

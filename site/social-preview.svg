@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <style>
+    text { font-family: "Avenir Next", Avenir, "Segoe UI", Seravek, Ubuntu, "Helvetica Neue", Arial, sans-serif; }
+    .word { fill: #161a33; font-size: 46px; font-weight: 600; letter-spacing: -0.5px; }
+    .head { fill: #161a33; font-size: 68px; font-weight: 600; letter-spacing: -2px; }
+    .sub { fill: #4f5675; font-size: 30px; font-weight: 500; }
+    .card { fill: #ffffff; stroke: #d5dae8; stroke-width: 2; }
+    .name { fill: #161a33; font-size: 22px; font-weight: 600; }
+    .role { fill: #4f5675; font-size: 18px; }
+    .line { stroke: #aeb6cf; stroke-width: 3; fill: none; }
+  </style>
+  <rect width="1280" height="640" fill="#f2f4f8"/>
+  <g transform="translate(80 72)">
+    <rect width="64" height="64" rx="16" fill="#2546f0"/>
+    <path d="M32 26v8M18 34h28M18 34v6M46 34v6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="19" r="7" fill="#f2b233"/>
+    <circle cx="18" cy="45" r="6" fill="#fff"/>
+    <circle cx="46" cy="45" r="6" fill="#fff"/>
+    <text x="84" y="48" class="word">People<tspan fill="#2546f0">Base</tspan></text>
+  </g>
+  <text x="80" y="290" class="head">A small HR system</text>
+  <text x="80" y="370" class="head">you can read in</text>
+  <text x="80" y="450" class="head">one sitting.</text>
+  <text x="80" y="540" class="sub">Records, reporting lines, pay history and time off.</text>
+
+  <path class="line" d="M960 190v40M820 230h280M820 230v40M1100 230v40M1100 350v40M1100 390h-110v40M1100 390h0"/>
+  <path class="line" d="M1100 390v40"/>
+  <rect class="card" x="840" y="110" width="240" height="80" rx="14"/>
+  <rect x="840" y="110" width="240" height="8" rx="4" fill="#f2b233"/>
+  <text x="864" y="152" class="name">Morgan Example</text>
+  <text x="864" y="176" class="role">Operations</text>
+  <rect class="card" x="700" y="270" width="240" height="80" rx="14"/>
+  <text x="724" y="312" class="name">Avery Example</text>
+  <text x="724" y="336" class="role">Design</text>
+  <rect class="card" x="980" y="270" width="240" height="80" rx="14"/>
+  <text x="1004" y="312" class="name">Riley Example</text>
+  <text x="1004" y="336" class="role">Engineering</text>
+  <rect class="card" x="870" y="430" width="200" height="72" rx="14"/>
+  <text x="890" y="466" class="name">Casey Example</text>
+  <text x="890" y="488" class="role">Engineer</text>
+  <rect class="card" x="1080" y="430" width="160" height="72" rx="14"/>
+  <text x="1100" y="466" class="name">Jordan E.</text>
+  <text x="1100" y="488" class="role">Engineer</text>
+  <rect x="1104" y="514" width="112" height="30" rx="15" fill="#fdf1d6"/>
+  <rect x="1104" y="514" width="4" height="30" fill="#f2b233"/>
+  <text x="1118" y="535" style="font-size:17px;font-weight:600" fill="#161a33">Pending</text>
+</svg>

@@ -1,46 +1,72 @@
 {% extends 'base.html' %}
-{% block title %}Employee directory · PeopleBase{% endblock %}
+{% block title %}Directory | PeopleBase{% endblock %}
 {% block content %}
-<section class="directory-heading">
-    <div><p class="eyebrow">People operations</p><h1>Directory</h1><p>Search, filter, review, and export workforce records.</p></div>
-    <a class="button" href="{{ url_for('add_employee') }}">Add employee</a>
+<section class="page-heading">
+    <div><h1>Directory</h1><p class="lede">Find people by name, title, team or status, and export exactly what you see.</p></div>
+    <div class="heading-actions"><a class="button" href="{{ url_for('add_employee') }}">Add employee</a></div>
 </section>
-<section class="directory-tools" aria-label="Directory controls and summary">
+<section class="panel directory-tools" aria-label="Search and filters">
     <form class="filter-form" method="get" action="{{ url_for('view_employees') }}">
-        <label for="q">Search</label>
-        <input id="q" name="q" type="search" value="{{ search }}" placeholder="Name or position">
-        <label for="position">Position</label>
-        <select id="position" name="position">
-            <option value="">All positions</option>
-            {% for position in positions %}
-            <option value="{{ position }}"{% if position == selected_position %} selected{% endif %}>{{ position }}</option>
-            {% endfor %}
-        </select>
-        <button class="button" type="submit">Apply filters</button>
-        {% if search or selected_position %}<a href="{{ url_for('view_employees') }}">Clear</a>{% endif %}
+        <div class="field field-search">
+            <label for="q">Search</label>
+            <input id="q" name="q" type="search" value="{{ search }}" placeholder="Name or job title">
+        </div>
+        <div class="field">
+            <label for="department">Department</label>
+            <select id="department" name="department">
+                <option value="">All departments</option>
+                {% for department in departments %}
+                <option value="{{ department.id }}"{% if department.id|string == selected_department %} selected{% endif %}>{{ department.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="position">Job title</label>
+            <select id="position" name="position">
+                <option value="">All titles</option>
+                {% for position in positions %}
+                <option value="{{ position }}"{% if position == selected_position %} selected{% endif %}>{{ position }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">Any status</option>
+                {% for key, label in EMPLOYMENT_STATUSES.items() %}
+                <option value="{{ key }}"{% if key == selected_status %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-actions">
+            <button class="button" type="submit">Apply filters</button>
+            {% if filtered %}<a href="{{ url_for('view_employees') }}">Clear</a>{% endif %}
+        </div>
     </form>
     <div class="summary-grid">
         <p><strong>{{ matching_count }}</strong><span>Matching records</span></p>
         <p><strong>${{ "{:,.0f}".format(total_payroll) }}</strong><span>Annual payroll</span></p>
         <p><strong>${{ "{:,.0f}".format(average_salary) }}</strong><span>Average salary</span></p>
     </div>
-    <a class="export-link" href="{{ url_for('export_employees', q=search, position=selected_position) }}">Export this view as CSV →</a>
+    <p class="export"><a href="{{ url_for('export_employees', **filter_args) }}">Download these {{ matching_count }} records as CSV</a></p>
 </section>
 {% if pagination.total %}
 <div class="table-wrap">
     <table>
-        <thead><tr><th>Name</th><th>Position</th><th>Annual salary</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <thead><tr><th scope="col">Name</th><th scope="col">Job title</th><th scope="col">Department</th><th scope="col">Status</th><th scope="col" class="num">Annual salary</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
             {% for employee in employees %}
             <tr>
-                <td><strong>{{ employee.name }}</strong><small>ID {{ employee.id }}</small></td>
+                <td><a class="person-link" href="{{ url_for('employee_profile', employee_id=employee.id) }}">{{ employee.name }}</a><small>ID {{ employee.id }}</small></td>
                 <td>{{ employee.position }}</td>
-                <td>${{ "{:,.2f}".format(employee.salary) }}</td>
+                <td>{{ employee.department.name if employee.department else "None" }}</td>
+                <td><span class="status status-{{ employee.status }}">{{ employee.status_label }}</span></td>
+                <td class="num">${{ "{:,.2f}".format(employee.salary) }}</td>
                 <td class="row-actions">
                     <a href="{{ url_for('update_employee', employee_id=employee.id) }}">Edit</a>
-                    <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Delete this employee?')">
+                    <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" data-confirm="Delete {{ employee.name }}? This cannot be undone.">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit">Delete</button>
+                        <button class="link-button link-danger" type="submit">Delete</button>
                     </form>
                 </td>
             </tr>
@@ -49,13 +75,13 @@
     </table>
     {% if pagination.pages > 1 %}
     <nav class="pagination" aria-label="Directory pages">
-        {% if pagination.has_prev %}<a href="{{ url_for('view_employees', page=pagination.prev_num, **page_args) }}" rel="prev">← Previous</a>{% else %}<span aria-hidden="true">← Previous</span>{% endif %}
+        {% if pagination.has_prev %}<a href="{{ url_for('view_employees', page=pagination.prev_num, **page_args) }}" rel="prev">Previous page</a>{% else %}<span aria-hidden="true">Previous page</span>{% endif %}
         <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
-        {% if pagination.has_next %}<a href="{{ url_for('view_employees', page=pagination.next_num, **page_args) }}" rel="next">Next →</a>{% else %}<span aria-hidden="true">Next →</span>{% endif %}
+        {% if pagination.has_next %}<a href="{{ url_for('view_employees', page=pagination.next_num, **page_args) }}" rel="next">Next page</a>{% else %}<span aria-hidden="true">Next page</span>{% endif %}
     </nav>
     {% endif %}
 </div>
 {% else %}
-<section class="empty-state"><span>0 matches</span><h2>No records found.</h2><p>Clear the filters or add a new employee.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
+<section class="empty-state"><h2>No records found.</h2><p>Nobody matches these filters. Clear them to see everyone, or add a new employee.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
 {% endif %}
 {% endblock %}

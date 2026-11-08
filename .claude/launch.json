@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "peoplebase-app",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/dev.sh"],
+      "port": 4104
+    },
+    {
+      "name": "peoplebase-site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4114", "--directory", "site"],
+      "port": 4114
+    }
+  ]
+}

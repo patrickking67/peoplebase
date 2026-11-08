@@ -183,3 +183,19 @@ def test_directory_links_to_filtered_export(client):
     response = client.get("/employees?q=avery")
 
     assert b"/employees.csv?q=avery" in response.data
+
+
+@pytest.mark.parametrize("page", ["99999999999999999999", str(2**63)])
+def test_huge_page_number_shows_last_page(client, bulk_staff, page):
+    response = client.get(f"/employees?page={page}")
+
+    assert response.status_code == 200
+    assert b"Page 2 of 2" in response.data
+    assert row_count(response) == 6
+
+
+def test_huge_per_page_is_capped(client, bulk_staff):
+    response = client.get("/employees?per_page=99999999999999999999")
+
+    assert response.status_code == 200
+    assert row_count(response) == 31

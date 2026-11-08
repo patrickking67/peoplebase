@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Time off | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Time off</h1><p class="lede">Requests go to the person's manager. Someone without a manager can be approved by any other current employee.</p></div>
+    <div class="heading-actions"><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></div>
+</section>
+<nav class="tabs" aria-label="Filter requests by status">
+    <a href="{{ url_for('view_time_off') }}"{% if not selected_status %} aria-current="page"{% endif %}>All</a>
+    {% for key, label in TIME_OFF_STATUSES.items() %}
+    <a href="{{ url_for('view_time_off', status=key) }}"{% if selected_status == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+</nav>
+{% if requests %}
+<ul class="request-list">
+    {% for item in requests %}
+    <li class="request request-{{ item.status }}">
+        <div class="request-main">
+            <p class="request-who"><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a> <span class="status status-{{ item.status }}">{{ item.status_label }}</span></p>
+            <p class="request-when">{{ item.kind_label }}, <time datetime="{{ item.start_date.isoformat() }}">{{ item.start_date.isoformat() }}</time>{% if item.days > 1 %} to <time datetime="{{ item.end_date.isoformat() }}">{{ item.end_date.isoformat() }}</time>{% endif %} <span class="quiet">({{ item.days }} {{ "day" if item.days == 1 else "days" }})</span></p>
+            {% if item.note %}<p class="request-note">{{ item.note }}</p>{% endif %}
+            {% if item.status != 'pending' %}<p class="quiet">{{ item.status_label }} by {{ item.decided_by.name if item.decided_by else "a former employee" }}.</p>{% endif %}
+        </div>
+        {% if item.status == 'pending' %}
+        {% set choices = item.approver_choices() %}
+        <form class="decision-form" method="post" action="{{ url_for('decide_time_off', request_id=item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="approver-{{ item.id }}">Decided by</label>
+            <select id="approver-{{ item.id }}" name="approver_id" required>
+                {% if choices|length != 1 %}<option value="">Choose a person</option>{% endif %}
+                {% for person in choices %}
+                <option value="{{ person.id }}">{{ person.name }}</option>
+                {% endfor %}
+            </select>
+            <div class="decision-buttons">
+                <button class="button" type="submit" name="decision" value="approve">Approve</button>
+                <button class="button button-quiet" type="submit" name="decision" value="deny">Deny</button>
+            </div>
+        </form>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<section class="empty-state"><h2>No {{ TIME_OFF_STATUSES[selected_status]|lower if selected_status else "" }} requests.</h2><p>When someone needs a day off, record it here so their manager can approve it.</p><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></section>
+{% endif %}
+{% endblock %}

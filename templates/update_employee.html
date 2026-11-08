@@ -1,17 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}Update {{ employee.name }} · PeopleBase{% endblock %}
+{% block title %}Update {{ employee.name }} | PeopleBase{% endblock %}
 {% block content %}
 <section class="form-layout">
-    <header><p class="eyebrow">Record {{ employee.id }}</p><h1>Update employee.</h1><p>Keep the directory accurate and current.</p></header>
+    <header><h1>Edit {{ employee.name }}.</h1><p>Keep the directory accurate and current. A new title or salary is added to the compensation history with the effective date below.</p></header>
     <form method="post" action="{{ url_for('update_employee', employee_id=employee.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label for="name">Full name</label>
-        <input type="text" name="name" id="name" value="{{ values.get('name', employee.name) }}" maxlength="100" autocomplete="name" required>
-        <label for="position">Position</label>
-        <input type="text" name="position" id="position" value="{{ values.get('position', employee.position) }}" maxlength="100" autocomplete="organization-title" required>
-        <label for="salary">Annual salary</label>
-        <input type="number" min="0" max="999999999.99" step="0.01" name="salary" id="salary" value="{{ values.get('salary', employee.salary) }}" inputmode="decimal" required>
-        <div class="form-actions"><button class="button" type="submit">Save changes</button><a href="{{ url_for('view_employees') }}">Cancel</a></div>
+        {% include '_employee_form.html' %}
+        <fieldset>
+            <legend>If the title or salary changed</legend>
+            <label for="effective_date">Effective date</label>
+            <input type="date" name="effective_date" id="effective_date" min="1900-01-01" max="2100-12-31" value="{{ values.get('effective_date', today.isoformat()) }}">
+            <label for="reason">Reason</label>
+            <input type="text" name="reason" id="reason" value="{{ values.get('reason', '') }}" maxlength="100" placeholder="Promotion, market adjustment, transfer">
+        </fieldset>
+        <div class="form-actions"><button class="button" type="submit">Save changes</button><a href="{{ url_for('employee_profile', employee_id=employee.id) }}">Cancel</a></div>
     </form>
 </section>
 {% endblock %}

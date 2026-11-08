@@ -5,7 +5,6 @@ import pytest
 
 from app import Employee, create_app, db, neutralize_formula
 
-
 # CSRF
 
 
@@ -121,3 +120,43 @@ def test_csv_export_neutralizes_formula_cells(client, add_employees):
     assert "'=cmd|' /C calc'!A0" in cells
     assert "'+Analyst" in cells
     assert "Avery Example" in cells
+
+
+# Response headers and request limits
+
+
+@pytest.mark.parametrize("path", ["/", "/employees", "/employees/new", "/employees.csv"])
+def test_security_headers_are_set(client, path):
+    response = client.get(path)
+
+    csp = response.headers["Content-Security-Policy"]
+    assert "script-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "same-origin"
+
+
+def test_templates_have_no_inline_event_handlers(client):
+    for path in ["/", "/employees", "/employees/new", "/employees/1/edit"]:
+        assert b"onsubmit=" not in client.get(path).data
+        assert b"onclick=" not in client.get(path).data
+
+
+def test_delete_form_asks_for_confirmation(client):
+    assert b'data-confirm="Delete Avery Example? This cannot be undone."' in client.get("/employees").data
+
+
+def test_csv_export_is_not_cached(client):
+    assert client.get("/employees.csv").headers["Cache-Control"] == "no-store"
+
+
+def test_oversized_request_body_is_rejected(client, app, csrf_token):
+    response = client.post(
+        "/employees/new",
+        data={"name": "A" * 70_000, "position": "Engineer", "salary": "1", "csrf_token": csrf_token},
+    )
+
+    assert response.status_code == 413
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Employee.id))) == 1

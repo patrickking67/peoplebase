@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Departments | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Departments</h1><p class="lede">Group people into teams. Headcount counts everyone who has not left.</p></div>
+</section>
+<div class="split">
+    <section class="panel" aria-labelledby="department-list-title">
+        <h2 id="department-list-title">All departments</h2>
+        {% if departments %}
+        <ul class="department-list">
+            {% for row in departments %}
+            <li>
+                <a href="{{ url_for('view_employees', department=row.department.id) }}">{{ row.department.name }}</a>
+                <span class="num">{{ row.headcount }} {{ "person" if row.headcount == 1 else "people" }}</span>
+                {% if not row.department.employees %}
+                <form method="post" action="{{ url_for('delete_department', department_id=row.department.id) }}" data-confirm="Delete the {{ row.department.name }} department?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="link-button" type="submit">Delete</button>
+                </form>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">No departments yet. Add the first one to start grouping people.</p>
+        {% endif %}
+    </section>
+    <section class="panel" aria-labelledby="department-form-title">
+        <h2 id="department-form-title">Add a department</h2>
+        <form class="stacked-form" method="post" action="{{ url_for('add_department') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="department-name">Name</label>
+            <input type="text" id="department-name" name="name" value="{{ values.get('name', '') }}" maxlength="100" required>
+            <div class="form-actions"><button class="button" type="submit">Add department</button></div>
+        </form>
+    </section>
+</div>
+{% endblock %}

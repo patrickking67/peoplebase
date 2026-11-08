@@ -74,6 +74,12 @@ def test_employee_crud_flow(client, app, csrf_token):
         ({"name": "A", "position": "Engineer", "salary": "-1"}, b"must be between"),
         ({"name": "A", "position": "Engineer", "salary": "1e999"}, b"must be between"),
         ({"name": "A", "position": "Engineer", "salary": "1000000000"}, b"must be between"),
+        ({"name": "A", "position": "Engineer", "salary": "1_000"}, b"must be a number"),
+        ({"name": "A", "position": "Engineer", "salary": "\u0661\u0662\u0663"}, b"must be a number"),
+        ({"name": "A", "position": "Engineer", "salary": "0x10"}, b"must be a number"),
+        ({"name": "A\x00B", "position": "Engineer", "salary": "1"}, b"control characters"),
+        ({"name": "A", "position": "Line\nBreak", "salary": "1"}, b"control characters"),
+        ({"name": "A", "position": "Tab\tbed", "salary": "1"}, b"control characters"),
     ],
 )
 def test_invalid_employee_data_is_rejected(client, app, csrf_token, data, error):
@@ -125,3 +131,51 @@ def test_user_input_is_html_escaped(client, add_employees):
 
     assert b"<script>alert(1)</script>" not in response.data
     assert b"&lt;script&gt;alert(1)&lt;/script&gt;" in response.data
+
+
+@pytest.mark.parametrize(
+    "method,path,status,text",
+    [
+        ("get", "/does-not-exist", 404, b"Not Found"),
+        ("get", "/employees/999/edit", 404, b"Not Found"),
+        ("get", "/employees/1/delete", 405, b"Method Not Allowed"),
+        ("post", "/employees/new", 400, b"did not come from PeopleBase"),
+    ],
+)
+def test_error_pages_use_the_app_layout(client, method, path, status, text):
+    response = getattr(client, method)(path)
+
+    assert response.status_code == status
+    assert text in response.data
+    assert b"Back to PeopleBase" in response.data
+    assert b'class="site-header"' in response.data
+
+
+def test_unexpected_errors_show_a_generic_page(app):
+    app.config["PROPAGATE_EXCEPTIONS"] = False
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("secret internal detail")
+
+    response = app.test_client().get("/boom")
+
+    assert response.status_code == 500
+    assert b"Internal Server Error" in response.data
+    assert b"secret internal detail" not in response.data
+
+
+def test_layout_links_brand_assets_and_marks_current_page(client):
+    response = client.get("/employees")
+
+    assert b'href="/static/favicon.svg"' in response.data
+    assert b'href="/static/apple-touch-icon.png"' in response.data
+    assert b'<a href="/employees" aria-current="page">Directory</a>' in response.data
+    assert b'href="#main"' in response.data
+
+
+@pytest.mark.parametrize(
+    "path", ["/static/favicon.svg", "/static/favicon.ico", "/static/apple-touch-icon.png", "/static/brand/logo.svg"]
+)
+def test_brand_assets_are_served(client, path):
+    assert client.get(path).status_code == 200
