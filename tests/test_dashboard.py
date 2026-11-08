@@ -164,3 +164,36 @@ def test_org_chart_shows_reporting_lines(client, staffed):
     assert body.index(b"Morgan Example") < body.index(b"Riley Example")
     assert b"Former Example" not in body
     assert b"On leave" in body
+
+
+# Demo data
+
+
+def test_seed_demo_fills_an_empty_database(app):
+    with app.app_context():
+        db.session.delete(db.session.get(Employee, 1))
+        db.session.commit()
+
+    result = app.test_cli_runner().invoke(args=["seed-demo"])
+
+    assert result.exit_code == 0, result.output
+    assert "Added 13 demo employees in 5 departments and 5 time-off requests." in result.output
+    with app.app_context():
+        names = db.session.scalars(db.select(Employee.name)).all()
+        assert all(name.endswith(" Example") for name in names)
+        jordan = db.session.scalar(db.select(Employee).where(Employee.name == "Jordan Example"))
+        assert [change.reason for change in jordan.compensation_history] == ["Promotion", "Hired"]
+        assert jordan.manager.name == "Riley Example"
+
+    client = app.test_client()
+    for path in ["/", "/employees", "/org", "/departments", "/time-off"]:
+        assert client.get(path).status_code == 200
+
+
+def test_seed_demo_refuses_a_database_with_people(app):
+    result = app.test_cli_runner().invoke(args=["seed-demo"])
+
+    assert result.exit_code != 0
+    assert "already has employees" in result.output
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Employee.id))) == 1

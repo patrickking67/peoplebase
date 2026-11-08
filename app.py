@@ -9,6 +9,8 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
 
+import click
+
 from flask import (
     Flask,
     abort,
@@ -515,6 +517,20 @@ def create_app(test_config=None):
             )
         return redirect(url_for("view_time_off"))
 
+    @app.cli.command("seed-demo")
+    def seed_demo_command():
+        """Load clearly fake demo data into an empty database."""
+        if db.session.scalar(db.select(db.func.count(Employee.id))):
+            raise click.ClickException(
+                "The database already has employees. seed-demo only fills an empty "
+                "database, so it never mixes demo rows with real ones."
+            )
+        summary = seed_demo_data(date.today())
+        click.echo(
+            f"Added {summary['employees']} demo employees in {summary['departments']} "
+            f"departments and {summary['time_off']} time-off requests."
+        )
+
     with app.app_context():
         db.create_all()
         upgrade_schema()
@@ -866,6 +882,79 @@ def summarize_employees(filters):
         "total_payroll": total_payroll,
         "average_salary": average_salary,
     }
+
+
+# Demo people are named "<first> Example" so nobody mistakes them for real records.
+DEMO_DEPARTMENTS = ["Engineering", "Design", "Operations", "Finance", "People"]
+DEMO_STAFF = [
+    # name, title, department, manager, salary, years and days since start, status
+    ("Morgan Example", "Chief Operating Officer", "Operations", None, "210000", (8, -12), "active"),
+    ("Riley Example", "Engineering Director", "Engineering", "Morgan Example", "185000", (6, -3), "active"),
+    ("Jordan Example", "Senior Engineer", "Engineering", "Riley Example", "152000", (4, 40), "active"),
+    ("Casey Example", "Engineer", "Engineering", "Riley Example", "128000", (2, -20), "active"),
+    ("Taylor Example", "Engineer", "Engineering", "Riley Example", "121000", (1, 200), "on_leave"),
+    ("Avery Example", "Design Lead", "Design", "Morgan Example", "148000", (5, 15), "active"),
+    ("Quinn Example", "Product Designer", "Design", "Avery Example", "112000", (1, -9), "active"),
+    ("Drew Example", "Operations Manager", "Operations", "Morgan Example", "118000", (3, 120), "active"),
+    ("Skyler Example", "Support Specialist", "Operations", "Drew Example", "68000", (0, 75), "active"),
+    ("Harper Example", "Finance Manager", "Finance", "Morgan Example", "134000", (7, 28), "active"),
+    ("Rowan Example", "Accountant", "Finance", "Harper Example", "86000", (2, 160), "active"),
+    ("Emerson Example", "People Partner", "People", "Morgan Example", "104000", (3, -1), "active"),
+    ("Parker Example", "Recruiter", "People", "Emerson Example", "79000", (4, 300), "terminated"),
+]
+
+
+def seed_demo_data(today):
+    """Create the demo organization relative to today. Expects an empty database."""
+    departments = {name: Department(name=name) for name in DEMO_DEPARTMENTS}
+    db.session.add_all(departments.values())
+    people = {}
+    for name, title, department, manager, salary, (years, days), status in DEMO_STAFF:
+        start = anniversary_on(today, today.year - years) - timedelta(days=days)
+        employee = Employee(
+            name=name,
+            position=title,
+            salary=Decimal(salary),
+            department=departments[department],
+            manager=people.get(manager),
+            status=status,
+            start_date=start,
+        )
+        employee.compensation_history.append(
+            CompensationChange(position=title, salary=Decimal(salary), effective_date=start, reason="Hired")
+        )
+        people[name] = employee
+        db.session.add(employee)
+
+    raise_on = anniversary_on(today, today.year - 1)
+    jordan = people["Jordan Example"]
+    jordan.compensation_history[0].position = "Engineer"
+    jordan.compensation_history[0].salary = Decimal("134000")
+    jordan.compensation_history.append(
+        CompensationChange(position="Senior Engineer", salary=Decimal("152000"), effective_date=raise_on, reason="Promotion")
+    )
+
+    requests = [
+        ("Casey Example", "vacation", -1, 3, "approved", "Riley Example"),
+        ("Quinn Example", "sick", 0, 0, "approved", "Avery Example"),
+        ("Jordan Example", "vacation", 14, 18, "pending", None),
+        ("Rowan Example", "personal", 6, 6, "pending", None),
+        ("Skyler Example", "vacation", 30, 34, "denied", "Drew Example"),
+    ]
+    for name, kind, first, last, status, approver in requests:
+        db.session.add(
+            TimeOffRequest(
+                employee=people[name],
+                kind=kind,
+                start_date=today + timedelta(days=first),
+                end_date=today + timedelta(days=last),
+                status=status,
+                decided_by=people.get(approver),
+                decided_at=utcnow() if approver else None,
+            )
+        )
+    db.session.commit()
+    return {"employees": len(people), "departments": len(departments), "time_off": len(requests)}
 
 
 def headcount_by_department(employees):
