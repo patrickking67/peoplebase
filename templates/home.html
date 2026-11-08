@@ -1,25 +1,74 @@
 {% extends 'base.html' %}
-{% block title %}PeopleBase · Employee data, clearly managed{% endblock %}
+{% block title %}Dashboard · PeopleBase{% endblock %}
 {% block content %}
-<section class="hero">
+<section class="page-heading dashboard-heading">
     <div>
-        <p class="eyebrow">Structured people data</p>
-        <h1>A clear view of your team.</h1>
-        <p class="hero-copy">A focused employee database with validated records, dependable CRUD workflows, and a clean Flask architecture.</p>
-        <div class="actions">
-            <a class="button" href="{{ url_for('view_employees') }}">Open directory</a>
-            <a class="text-link" href="{{ url_for('add_employee') }}">Add an employee →</a>
-        </div>
+        <h1 class="headline">{{ status_counts.active }} {{ "person" if status_counts.active == 1 else "people" }} at work{% if department_count %} across {{ department_count }} {{ "department" if department_count == 1 else "departments" }}{% endif %}.</h1>
+        <p class="lede">
+            {% if out_today %}{{ out_today|length }} out today. {% endif %}
+            {% if status_counts.on_leave %}{{ status_counts.on_leave }} on leave. {% endif %}
+            {% if pending_count %}<a href="{{ url_for('view_time_off', status='pending') }}">{{ pending_count }} time-off {{ "request" if pending_count == 1 else "requests" }} waiting</a>.{% else %}No time off waiting for a decision.{% endif %}
+        </p>
     </div>
-    <aside class="stat-card" aria-label="Employee summary">
-        <span>Current records</span>
-        <strong>{{ employee_count }}</strong>
-        <p>Stored locally by default. Ready for a production database through <code>DATABASE_URL</code>.</p>
-    </aside>
+    <div class="heading-actions">
+        <a class="button" href="{{ url_for('add_employee') }}">Add employee</a>
+        <a class="button button-quiet" href="{{ url_for('request_time_off') }}">Request time off</a>
+    </div>
 </section>
-<section class="feature-grid" aria-label="Application features">
-    <article><span>01</span><h2>Validated</h2><p>Required fields, bounded values, and useful errors protect data quality.</p></article>
-    <article><span>02</span><h2>Testable</h2><p>An application factory and isolated database configuration keep behavior predictable.</p></article>
-    <article><span>03</span><h2>Portable</h2><p>SQLite works out of the box while environment configuration supports deployment.</p></article>
-</section>
+
+<div class="dashboard-grid">
+    <section class="panel" aria-labelledby="totals-title">
+        <h2 id="totals-title">Records</h2>
+        <dl class="facts facts-row">
+            <div><dt>Current records</dt><dd class="num">{{ employee_count }}</dd></div>
+            {% for key, label in EMPLOYMENT_STATUSES.items() %}
+            <div><dt>{{ label }}</dt><dd class="num"><a href="{{ url_for('view_employees', status=key) }}">{{ status_counts[key] }}</a></dd></div>
+            {% endfor %}
+        </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="departments-title">
+        <div class="panel-heading"><h2 id="departments-title">Headcount by department</h2><a href="{{ url_for('view_departments') }}">Manage</a></div>
+        {% if departments %}
+        {% set largest = departments[0][1] %}
+        <ul class="bar-list">
+            {% for name, headcount in departments %}
+            <li>
+                <span class="bar-label">{{ name }}</span>
+                <meter min="0" max="{{ largest }}" value="{{ headcount }}" aria-hidden="true">{{ headcount }}</meter>
+                <span class="num">{{ headcount }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Nobody on staff yet. <a href="{{ url_for('add_employee') }}">Add the first employee</a>.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="anniversaries-title">
+        <h2 id="anniversaries-title">Work anniversaries in the next 30 days</h2>
+        {% if anniversaries %}
+        <ul class="plain-list">
+            {% for item in anniversaries %}
+            <li><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a><span>{{ item.years }} {{ "year" if item.years == 1 else "years" }} on <time datetime="{{ item.date.isoformat() }}">{{ item.date.isoformat() }}</time></span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">None coming up. Anniversaries appear here once start dates are recorded.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="out-title">
+        <h2 id="out-title">Out today</h2>
+        {% if out_today %}
+        <ul class="plain-list">
+            {% for item in out_today %}
+            <li><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a><span>{{ item.kind_label }}, back after {{ item.end_date.isoformat() }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Everyone is in today.</p>
+        {% endif %}
+    </section>
+</div>
 {% endblock %}

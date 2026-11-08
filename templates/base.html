@@ -12,7 +12,9 @@
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}">People<span>Base</span></a>
         <nav aria-label="Primary navigation">
+            <a href="{{ url_for('home') }}">Dashboard</a>
             <a href="{{ url_for('view_employees') }}">Directory</a>
+            <a href="{{ url_for('org_chart') }}">Org chart</a>
             <a href="{{ url_for('view_departments') }}">Departments</a>
             <a href="{{ url_for('view_time_off') }}">Time off</a>
             <a class="button button-small" href="{{ url_for('add_employee') }}">Add employee</a>

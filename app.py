@@ -4,7 +4,7 @@ import math
 import os
 import re
 import secrets
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
@@ -245,8 +245,44 @@ def create_app(test_config=None):
 
     @app.get("/")
     def home():
-        employee_count = db.session.scalar(db.select(db.func.count(Employee.id)))
-        return render_template("home.html", employee_count=employee_count)
+        today = date.today()
+        employees = db.session.scalars(db.select(Employee).order_by(Employee.name)).all()
+        current = [employee for employee in employees if employee.status != "terminated"]
+        out_today = db.session.scalars(
+            db.select(TimeOffRequest)
+            .where(
+                TimeOffRequest.status == "approved",
+                TimeOffRequest.start_date <= today,
+                TimeOffRequest.end_date >= today,
+            )
+            .order_by(TimeOffRequest.end_date)
+        ).all()
+        pending_count = db.session.scalar(
+            db.select(db.func.count(TimeOffRequest.id)).where(TimeOffRequest.status == "pending")
+        )
+        return render_template(
+            "home.html",
+            employee_count=len(employees),
+            status_counts={
+                key: sum(1 for employee in employees if employee.status == key)
+                for key in EMPLOYMENT_STATUSES
+            },
+            department_count=db.session.scalar(db.select(db.func.count(Department.id))),
+            departments=headcount_by_department(current),
+            anniversaries=upcoming_anniversaries(current, today),
+            out_today=out_today,
+            pending_count=pending_count,
+            today=today,
+        )
+
+    @app.get("/org")
+    def org_chart():
+        employees = db.session.scalars(
+            db.select(Employee)
+            .where(Employee.status != "terminated")
+            .order_by(Employee.name, Employee.id)
+        ).all()
+        return render_template("org.html", roots=build_org_tree(employees), total=len(employees))
 
     @app.get("/employees")
     def view_employees():
@@ -830,6 +866,72 @@ def summarize_employees(filters):
         "total_payroll": total_payroll,
         "average_salary": average_salary,
     }
+
+
+def headcount_by_department(employees):
+    """[(department name, headcount)] for current staff, largest first."""
+    counts = {}
+    for employee in employees:
+        name = employee.department.name if employee.department else "No department"
+        counts[name] = counts.get(name, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
+def anniversary_on(start, year):
+    """The anniversary of start in year. Feb 29 starts are marked on Feb 28 in other years."""
+    try:
+        return start.replace(year=year)
+    except ValueError:
+        return date(year, 2, 28)
+
+
+def upcoming_anniversaries(employees, today, within_days=30):
+    """Work anniversaries (one year or more) from today through within_days ahead."""
+    horizon = today + timedelta(days=within_days)
+    upcoming = []
+    for employee in employees:
+        if employee.start_date is None:
+            continue
+        for year in (today.year, today.year + 1):
+            anniversary = anniversary_on(employee.start_date, year)
+            years = year - employee.start_date.year
+            if years >= 1 and today <= anniversary <= horizon:
+                upcoming.append({"employee": employee, "date": anniversary, "years": years})
+                break
+    return sorted(upcoming, key=lambda item: (item["date"], item["employee"].name))
+
+
+def build_org_tree(employees):
+    """Nest employees under their managers.
+
+    Anyone whose manager is missing from the list (no manager, or a manager who
+    has left) becomes a root. A reporting loop written straight to the database
+    cannot recurse forever: each person is placed once, and anyone left over is
+    added as a root.
+    """
+    by_id = {employee.id: employee for employee in employees}
+    children = {employee.id: [] for employee in employees}
+    roots = []
+    for employee in employees:
+        if employee.manager_id in by_id and employee.manager_id != employee.id:
+            children[employee.manager_id].append(employee)
+        else:
+            roots.append(employee)
+
+    placed = set()
+
+    def node(employee):
+        placed.add(employee.id)
+        return {
+            "employee": employee,
+            "reports": [node(child) for child in children[employee.id] if child.id not in placed],
+        }
+
+    tree = [node(root) for root in roots]
+    for employee in employees:
+        if employee.id not in placed:
+            tree.append(node(employee))
+    return tree
 
 
 def neutralize_formula(value):
