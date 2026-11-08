@@ -1,0 +1,26 @@
+# PeopleBase
+
+> PeopleBase is a small open source HR system built with Flask and SQLAlchemy. It keeps employee records, departments, reporting lines, compensation history with effective dates, and time-off requests with a manager approval rule, and shows a people dashboard and an org chart. All server code is in one module (app.py) with server-rendered Jinja templates, CSRF protection, a strict Content-Security-Policy, spreadsheet-safe CSV export and a pytest suite. It has no login and is meant for demo data on a private network.
+
+## Docs
+
+- [README](https://github.com/patrickking67/peoplebase/blob/main/README.md): features, quickstart, configuration, approval rules and tests
+- [Architecture](https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md): models, request handling, validation and schema upgrades
+- [Agent guide](https://github.com/patrickking67/peoplebase/blob/main/AGENTS.md): layout, exact commands, conventions and definition of done
+- [Security policy](https://github.com/patrickking67/peoplebase/blob/main/SECURITY.md): reporting, scope and deployment notes
+- [Changelog](https://github.com/patrickking67/peoplebase/blob/main/CHANGELOG.md): what changed and when
+
+## Source
+
+- [Repository](https://github.com/patrickking67/peoplebase): MIT licensed
+- [app.py](https://github.com/patrickking67/peoplebase/blob/main/app.py): factory, models, routes, validation and the seed-demo command
+- [Tests](https://github.com/patrickking67/peoplebase/tree/main/tests): pytest suite
+
+## Live demo
+
+- [Landing page](https://patrickking67.github.io/peoplebase/): overview, screenshot and quickstart
+
+## Optional
+
+- [Contributing](https://github.com/patrickking67/peoplebase/blob/main/CONTRIBUTING.md): setup, branch names and pull request checklist
+- [License](https://github.com/patrickking67/peoplebase/blob/main/LICENSE): MIT
