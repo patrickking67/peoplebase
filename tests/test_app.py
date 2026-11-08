@@ -74,6 +74,12 @@ def test_employee_crud_flow(client, app, csrf_token):
         ({"name": "A", "position": "Engineer", "salary": "-1"}, b"must be between"),
         ({"name": "A", "position": "Engineer", "salary": "1e999"}, b"must be between"),
         ({"name": "A", "position": "Engineer", "salary": "1000000000"}, b"must be between"),
+        ({"name": "A", "position": "Engineer", "salary": "1_000"}, b"must be a number"),
+        ({"name": "A", "position": "Engineer", "salary": "\u0661\u0662\u0663"}, b"must be a number"),
+        ({"name": "A", "position": "Engineer", "salary": "0x10"}, b"must be a number"),
+        ({"name": "A\x00B", "position": "Engineer", "salary": "1"}, b"control characters"),
+        ({"name": "A", "position": "Line\nBreak", "salary": "1"}, b"control characters"),
+        ({"name": "A", "position": "Tab\tbed", "salary": "1"}, b"control characters"),
     ],
 )
 def test_invalid_employee_data_is_rejected(client, app, csrf_token, data, error):

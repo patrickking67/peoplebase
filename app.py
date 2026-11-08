@@ -2,6 +2,7 @@ import csv
 import hmac
 import math
 import os
+import re
 import secrets
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
@@ -31,6 +32,10 @@ CSRF_FORM_FIELD = "csrf_token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # Spreadsheet apps treat cells starting with these characters as formulas.
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+# Plain ASCII decimal numbers, optionally in scientific notation. Decimal() on
+# its own also accepts "1_000" and non-ASCII digits, which a form should not.
+SALARY_PATTERN = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?", re.ASCII)
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class Employee(db.Model):
@@ -218,7 +223,11 @@ def validate_employee(form):
         return None, "Name, position, and salary are required."
     if len(name) > 100 or len(position) > 100:
         return None, "Name and position must be 100 characters or fewer."
+    if CONTROL_CHARACTERS.search(name) or CONTROL_CHARACTERS.search(position):
+        return None, "Name and position cannot contain tabs, line breaks or other control characters."
 
+    if not SALARY_PATTERN.fullmatch(salary_text):
+        return None, "Salary must be a number."
     try:
         salary = Decimal(salary_text)
     except InvalidOperation:
