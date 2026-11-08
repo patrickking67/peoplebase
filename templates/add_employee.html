@@ -2,15 +2,9 @@
 {% block title %}Add employee · PeopleBase{% endblock %}
 {% block content %}
 <section class="form-layout">
-    <header><p class="eyebrow">New record</p><h1>Add an employee.</h1><p>Create a structured record for the directory.</p></header>
+    <header><p class="eyebrow">New record</p><h1>Add an employee.</h1><p>Create a record with their role, team and start date. The starting salary goes into their compensation history.</p></header>
     <form method="post" action="{{ url_for('add_employee') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label for="name">Full name</label>
-        <input type="text" name="name" id="name" value="{{ values.get('name', '') }}" maxlength="100" autocomplete="name" required>
-        <label for="position">Position</label>
-        <input type="text" name="position" id="position" value="{{ values.get('position', '') }}" maxlength="100" autocomplete="organization-title" required>
-        <label for="salary">Annual salary</label>
-        <input type="number" min="0" max="999999999.99" step="0.01" name="salary" id="salary" value="{{ values.get('salary', '') }}" inputmode="decimal" required>
+        {% include '_employee_form.html' %}
         <div class="form-actions"><button class="button" type="submit">Add employee</button><a href="{{ url_for('view_employees') }}">Cancel</a></div>
     </form>
 </section>

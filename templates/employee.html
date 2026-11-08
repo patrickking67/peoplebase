@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}{{ employee.name }} · PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading profile-heading">
+    <div>
+        <h1>{{ employee.name }}</h1>
+        <p class="lede">{{ employee.position }}{% if employee.department %} in <a href="{{ url_for('view_employees', department=employee.department_id) }}">{{ employee.department.name }}</a>{% endif %}</p>
+        <p><span class="status status-{{ employee.status }}">{{ employee.status_label }}</span></p>
+    </div>
+    <div class="heading-actions">
+        <a class="button" href="{{ url_for('update_employee', employee_id=employee.id) }}">Edit record</a>
+        <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" data-confirm="Delete {{ employee.name }}? This cannot be undone.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="button button-quiet button-danger" type="submit">Delete</button>
+        </form>
+    </div>
+</section>
+
+<div class="profile-grid">
+    <section class="panel" aria-labelledby="facts-title">
+        <h2 id="facts-title">Employment</h2>
+        <dl class="facts">
+            <div><dt>Employee ID</dt><dd>{{ employee.id }}</dd></div>
+            <div><dt>Annual salary</dt><dd class="num">${{ "{:,.2f}".format(employee.salary) }}</dd></div>
+            <div><dt>Start date</dt><dd>{% if employee.start_date %}<time datetime="{{ employee.start_date.isoformat() }}">{{ employee.start_date.isoformat() }}</time>{% else %}Not recorded{% endif %}</dd></div>
+            <div><dt>Manager</dt><dd>{% if employee.manager %}<a href="{{ url_for('employee_profile', employee_id=employee.manager.id) }}">{{ employee.manager.name }}</a>{% else %}None{% endif %}</dd></div>
+        </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="reports-title">
+        <h2 id="reports-title">Direct reports</h2>
+        {% if employee.reports %}
+        <ul class="plain-list">
+            {% for report in employee.reports %}
+            <li><a href="{{ url_for('employee_profile', employee_id=report.id) }}">{{ report.name }}</a><span>{{ report.position }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Nobody reports to {{ employee.name }}.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel panel-wide" aria-labelledby="comp-title">
+        <h2 id="comp-title">Compensation history</h2>
+        {% if employee.compensation_history %}
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">Effective</th><th scope="col">Title</th><th scope="col" class="num">Annual salary</th><th scope="col">Reason</th></tr></thead>
+                <tbody>
+                    {% for change in employee.compensation_history %}
+                    <tr>
+                        <td><time datetime="{{ change.effective_date.isoformat() }}">{{ change.effective_date.isoformat() }}</time></td>
+                        <td>{{ change.position }}</td>
+                        <td class="num">${{ "{:,.2f}".format(change.salary) }}</td>
+                        <td>{{ change.reason or "Not given" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="quiet">No changes recorded yet. The next title or salary change starts the history.</p>
+        {% endif %}
+    </section>
+
+    {% block profile_extra %}{% endblock %}
+</div>
+{% endblock %}
