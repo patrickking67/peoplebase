@@ -686,12 +686,19 @@ def validate_employment(form, employee=None):
                 "so they cannot also be their manager."
             )
 
-    return {
+    values = {
         "status": status,
         "start_date": start_date,
         "department": department,
         "manager": manager,
-    }, None
+    }
+    if employee is not None:
+        # On edit, a field missing from the form keeps its value; a blank field clears it.
+        optional_fields = (("start_date", "start_date"), ("department", "department_id"), ("manager", "manager_id"))
+        for field, form_key in optional_fields:
+            if form_key not in form:
+                values[field] = getattr(employee, field)
+    return values, None
 
 
 def reports_up_to(person, ancestor):

@@ -398,3 +398,28 @@ def test_database_from_an_older_version_is_upgraded(tmp_path):
     with again.app_context():
         assert db.session.get(Employee, 1).name == "Legacy Example"
         db.engine.dispose()
+
+
+def test_edit_keeps_fields_the_form_leaves_out(client, app, csrf_token, org):
+    client.post(
+        f"/employees/{org['sam']}/edit",
+        data={"name": "Sam Example", "position": "Designer", "salary": "95000", "csrf_token": csrf_token},
+    )
+
+    with app.app_context():
+        sam = db.session.get(Employee, org["sam"])
+        assert sam.manager_id == org["riley"]
+        assert sam.department_id == org["design"]
+
+
+def test_edit_with_blank_fields_clears_them(client, app, csrf_token, org):
+    client.post(
+        f"/employees/{org['sam']}/edit",
+        data=employee_form(csrf_token, name="Sam Example", position="Designer", salary="95000", start_date=""),
+    )
+
+    with app.app_context():
+        sam = db.session.get(Employee, org["sam"])
+        assert sam.manager_id is None
+        assert sam.department_id is None
+        assert sam.start_date is None

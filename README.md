@@ -129,7 +129,7 @@ docs/architecture.md    Design notes and production gaps
 ./scripts/check.sh
 ```
 
-That runs `ruff check .`, `pytest -q` (176 tests, each on a fresh SQLite
+That runs `ruff check .`, `pytest -q` (178 tests, each on a fresh SQLite
 database), `scripts/check-ai-config.py` and `scripts/check-text.py`. The suite
 covers:
 
