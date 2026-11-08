@@ -92,7 +92,12 @@ def test_org_tree_survives_a_reporting_loop():
 def test_headcount_by_department_sorts_largest_first():
     ops = SimpleNamespace(name="Operations")
     design = SimpleNamespace(name="Design")
-    people = [person(1, "A", department=design), person(2, "B", department=ops), person(3, "C", department=ops), person(4, "D")]
+    people = [
+        person(1, "A", department=design),
+        person(2, "B", department=ops),
+        person(3, "C", department=ops),
+        person(4, "D"),
+    ]
 
     assert headcount_by_department(people) == [("Operations", 2), ("Design", 1), ("No department", 1)]
 
@@ -106,18 +111,25 @@ def staffed(app):
     with app.app_context():
         engineering = Department(name="Engineering")
         lead = Employee(
-            name="Morgan Example", position="Director", salary=1, department=engineering,
-            start_date=today.replace(year=today.year - 4) if not (today.month == 2 and today.day == 29) else date(today.year - 4, 2, 28),
+            name="Morgan Example",
+            position="Director",
+            salary=1,
+            department=engineering,
+            start_date=anniversary_on(today, today.year - 4),
         )
         report = Employee(name="Riley Example", position="Lead", salary=1, department=engineering, manager=lead)
         leaver = Employee(name="Former Example", position="Clerk", salary=1, status="terminated")
         away = Employee(name="Sam Example", position="Analyst", salary=1, status="on_leave")
         db.session.add_all([engineering, lead, report, leaver, away])
         db.session.flush()
+        yesterday, tomorrow = today - timedelta(days=1), today + timedelta(days=1)
+        next_week = today + timedelta(days=9)
         db.session.add_all(
             [
-                TimeOffRequest(employee=report, kind="vacation", start_date=today - timedelta(days=1), end_date=today + timedelta(days=1), status="approved"),
-                TimeOffRequest(employee=lead, kind="personal", start_date=today + timedelta(days=9), end_date=today + timedelta(days=9)),
+                TimeOffRequest(
+                    employee=report, kind="vacation", start_date=yesterday, end_date=tomorrow, status="approved"
+                ),
+                TimeOffRequest(employee=lead, kind="personal", start_date=next_week, end_date=next_week),
             ]
         )
         db.session.commit()

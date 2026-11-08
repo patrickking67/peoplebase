@@ -5,7 +5,6 @@ import pytest
 
 from app import Employee, create_app, db, neutralize_formula
 
-
 # CSRF
 
 

@@ -4,13 +4,12 @@ import math
 import os
 import re
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
 
 import click
-
 from flask import (
     Flask,
     abort,
@@ -25,7 +24,6 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException, InternalServerError
-
 
 db = SQLAlchemy()
 
@@ -77,7 +75,7 @@ EMPLOYEE_UPGRADE_COLUMNS = {
 
 
 def utcnow():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Department(db.Model):
@@ -931,7 +929,9 @@ def seed_demo_data(today):
     jordan.compensation_history[0].position = "Engineer"
     jordan.compensation_history[0].salary = Decimal("134000")
     jordan.compensation_history.append(
-        CompensationChange(position="Senior Engineer", salary=Decimal("152000"), effective_date=raise_on, reason="Promotion")
+        CompensationChange(
+            position="Senior Engineer", salary=Decimal("152000"), effective_date=raise_on, reason="Promotion"
+        )
     )
 
     requests = [
