@@ -1,5 +1,6 @@
 import csv
 import hmac
+import math
 import os
 import secrets
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -98,14 +99,15 @@ def create_app(test_config=None):
         per_page = min(max(per_page, 1), MAX_PER_PAGE)
 
         filters = employee_filters(search, position)
+        summary = summarize_employees(filters)
+        # Clamp to the last page before querying. A page past the end shows the
+        # last page, and a huge page number never reaches the database as an
+        # OFFSET too large for it to store.
+        last_page = max(math.ceil(summary["matching_count"] / per_page), 1)
+        page = min(page, last_page)
         statement = db.select(Employee).where(*filters).order_by(Employee.name, Employee.id)
         pagination = db.paginate(statement, page=page, per_page=per_page, error_out=False)
-        if pagination.pages and page > pagination.pages:
-            pagination = db.paginate(
-                statement, page=pagination.pages, per_page=per_page, error_out=False
-            )
 
-        summary = summarize_employees(filters)
         positions = db.session.scalars(
             db.select(Employee.position).distinct().order_by(Employee.position)
         ).all()
