@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Request time off · PeopleBase{% endblock %}
+{% block content %}
+<section class="form-layout">
+    <header><h1>Request time off.</h1><p>The request waits for the person's manager to approve or deny it. Dates are inclusive, up to 60 days per request.</p></header>
+    <form method="post" action="{{ url_for('request_time_off') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+            <legend>Request</legend>
+            <label for="employee_id">Who is taking time off</label>
+            <select name="employee_id" id="employee_id" required>
+                <option value="">Choose a person</option>
+                {% for employee in employees %}
+                <option value="{{ employee.id }}"{% if values.get('employee_id') == employee.id|string %} selected{% endif %}>{{ employee.name }}</option>
+                {% endfor %}
+            </select>
+            <label for="kind">Type</label>
+            <select name="kind" id="kind" required>
+                {% for key, label in TIME_OFF_KINDS.items() %}
+                <option value="{{ key }}"{% if values.get('kind') == key %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <div class="date-pair">
+                <div><label for="start_date">First day</label><input type="date" name="start_date" id="start_date" min="1900-01-01" max="2100-12-31" value="{{ values.get('start_date', '') }}" required></div>
+                <div><label for="end_date">Last day</label><input type="date" name="end_date" id="end_date" min="1900-01-01" max="2100-12-31" value="{{ values.get('end_date', '') }}" required></div>
+            </div>
+            <label for="note">Note <span class="optional">(optional)</span></label>
+            <input type="text" name="note" id="note" maxlength="200" value="{{ values.get('note', '') }}">
+        </fieldset>
+        <div class="form-actions"><button class="button" type="submit">Send request</button><a href="{{ url_for('view_time_off') }}">Cancel</a></div>
+    </form>
+</section>
+{% endblock %}

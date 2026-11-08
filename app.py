@@ -60,6 +60,10 @@ EMPLOYMENT_STATUSES = {
     "on_leave": "On leave",
     "terminated": "Terminated",
 }
+TIME_OFF_KINDS = {"vacation": "Vacation", "sick": "Sick leave", "personal": "Personal"}
+TIME_OFF_STATUSES = {"pending": "Pending", "approved": "Approved", "denied": "Denied"}
+TIME_OFF_DECISIONS = {"approve": "approved", "deny": "denied"}
+MAX_TIME_OFF_DAYS = 60
 # Columns added to the original employee table. db.create_all() never alters an
 # existing table, so upgrade_schema() adds any that an older database lacks.
 EMPLOYEE_UPGRADE_COLUMNS = {
@@ -104,6 +108,14 @@ class Employee(db.Model):
         order_by="(CompensationChange.effective_date.desc(), CompensationChange.id.desc())",
     )
 
+    time_off_requests = db.relationship(
+        "TimeOffRequest",
+        back_populates="employee",
+        foreign_keys="TimeOffRequest.employee_id",
+        cascade="all, delete-orphan",
+        order_by="TimeOffRequest.start_date.desc()",
+    )
+
     @property
     def status_label(self):
         return EMPLOYMENT_STATUSES.get(self.status, self.status)
@@ -124,6 +136,49 @@ class CompensationChange(db.Model):
     recorded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     employee = db.relationship("Employee", back_populates="compensation_history")
+
+
+class TimeOffRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
+    kind = db.Column(db.String(20), nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    note = db.Column(db.String(200), nullable=False, default="")
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    requested_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    decided_by_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True)
+    decided_at = db.Column(db.DateTime, nullable=True)
+
+    employee = db.relationship(
+        "Employee", foreign_keys=[employee_id], back_populates="time_off_requests"
+    )
+    decided_by = db.relationship("Employee", foreign_keys=[decided_by_id])
+
+    @property
+    def days(self):
+        """Calendar days covered, counting both the first and last day."""
+        return (self.end_date - self.start_date).days + 1
+
+    @property
+    def kind_label(self):
+        return TIME_OFF_KINDS.get(self.kind, self.kind)
+
+    @property
+    def status_label(self):
+        return TIME_OFF_STATUSES.get(self.status, self.status)
+
+    def approver_choices(self):
+        """Who may decide this request: the direct manager, or when there is no
+        current manager, anyone else who still works here."""
+        manager = self.employee.manager
+        if manager is not None and manager.status != "terminated":
+            return [manager]
+        return db.session.scalars(
+            db.select(Employee)
+            .where(Employee.id != self.employee_id, Employee.status != "terminated")
+            .order_by(Employee.name, Employee.id)
+        ).all()
 
 
 def create_app(test_config=None):
@@ -153,6 +208,8 @@ def create_app(test_config=None):
     db.init_app(app)
     app.jinja_env.globals["csrf_token"] = get_csrf_token
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
+    app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
+    app.jinja_env.globals["TIME_OFF_STATUSES"] = TIME_OFF_STATUSES
 
     @app.before_request
     def protect_from_csrf():
@@ -327,6 +384,11 @@ def create_app(test_config=None):
         # SQLite does not enforce foreign keys by default, so clear references here.
         for report in employee.reports:
             report.manager = None
+        db.session.execute(
+            db.update(TimeOffRequest)
+            .where(TimeOffRequest.decided_by_id == employee.id)
+            .values(decided_by_id=None)
+        )
         db.session.delete(employee)
         db.session.commit()
         flash(f"Deleted {employee_name}.", "success")
@@ -364,6 +426,58 @@ def create_app(test_config=None):
         db.session.commit()
         flash(f"Deleted the {department.name} department.", "success")
         return redirect(url_for("view_departments"))
+
+    @app.get("/time-off")
+    def view_time_off():
+        status = request.args.get("status", "").strip()
+        if status not in TIME_OFF_STATUSES:
+            status = ""
+        statement = db.select(TimeOffRequest).order_by(
+            TimeOffRequest.start_date.desc(), TimeOffRequest.id.desc()
+        )
+        if status:
+            statement = statement.where(TimeOffRequest.status == status)
+        return render_template(
+            "time_off.html",
+            requests=db.session.scalars(statement).all(),
+            selected_status=status,
+        )
+
+    @app.route("/time-off/new", methods=["GET", "POST"])
+    def request_time_off():
+        if request.method == "POST":
+            time_off, error = validate_time_off(request.form)
+            if error:
+                flash(error, "error")
+                return render_time_off_form(request.form), 400
+            db.session.add(time_off)
+            db.session.commit()
+            flash(
+                f"Requested {time_off.days} {'day' if time_off.days == 1 else 'days'} "
+                f"off for {time_off.employee.name}.",
+                "success",
+            )
+            return redirect(url_for("view_time_off"))
+        values = {}
+        employee_id = request.args.get("employee", "")
+        if is_small_id(employee_id):
+            values["employee_id"] = employee_id
+        return render_time_off_form(values)
+
+    @app.post("/time-off/<int:request_id>/decide")
+    def decide_time_off(request_id):
+        time_off = db.get_or_404(TimeOffRequest, request_id)
+        error = apply_time_off_decision(time_off, request.form)
+        if error:
+            flash(error, "error")
+        else:
+            db.session.commit()
+            flash(
+                f"{time_off.status_label} {time_off.employee.name}'s time off "
+                f"from {time_off.start_date.isoformat()}.",
+                "success",
+            )
+        return redirect(url_for("view_time_off"))
 
     with app.app_context():
         db.create_all()
@@ -558,6 +672,94 @@ def validate_compensation_change(form, employee, values):
         effective_date=effective_date or date.today(),
         reason=reason,
     ), None
+
+
+def render_time_off_form(values):
+    employees = db.session.scalars(
+        db.select(Employee)
+        .where(Employee.status != "terminated")
+        .order_by(Employee.name, Employee.id)
+    ).all()
+    return render_template("request_time_off.html", employees=employees, values=values)
+
+
+def validate_time_off(form):
+    employee, error = parse_id(form.get("employee_id"), Employee, "employee")
+    if error:
+        return None, error
+    if employee is None:
+        return None, "Choose who the time off is for."
+    if employee.status == "terminated":
+        return None, f"{employee.name} no longer works here."
+
+    kind = form.get("kind", "").strip()
+    if kind not in TIME_OFF_KINDS:
+        return None, "Choose a type of time off."
+
+    start_date, error = parse_date(form.get("start_date"), "First day", required=True)
+    if error:
+        return None, error
+    end_date, error = parse_date(form.get("end_date"), "Last day", required=True)
+    if error:
+        return None, error
+    if end_date < start_date:
+        return None, "The last day cannot be before the first day."
+    if (end_date - start_date).days + 1 > MAX_TIME_OFF_DAYS:
+        return None, f"A single request can cover at most {MAX_TIME_OFF_DAYS} days."
+
+    note, error = clean_text(form, "note", "Note", max_length=200, required=False)
+    if error:
+        return None, error
+
+    overlapping = db.session.scalar(
+        db.select(TimeOffRequest).where(
+            TimeOffRequest.employee_id == employee.id,
+            TimeOffRequest.status.in_(["pending", "approved"]),
+            TimeOffRequest.start_date <= end_date,
+            TimeOffRequest.end_date >= start_date,
+        )
+    )
+    if overlapping is not None:
+        return None, (
+            f"{employee.name} already has {overlapping.status_label.lower()} time off from "
+            f"{overlapping.start_date.isoformat()} to {overlapping.end_date.isoformat()}."
+        )
+
+    return TimeOffRequest(
+        employee=employee, kind=kind, start_date=start_date, end_date=end_date, note=note
+    ), None
+
+
+def apply_time_off_decision(time_off, form):
+    """Approve or deny a pending request. Returns an error message or None.
+
+    PeopleBase has no login, so the approver is named on the form and checked
+    against the reporting line: the requester's manager decides, or for someone
+    with no manager, any other current employee. Nobody decides their own request.
+    """
+    decision = TIME_OFF_DECISIONS.get(form.get("decision", "").strip())
+    if decision is None:
+        return "Choose approve or deny."
+    if time_off.status != "pending":
+        return f"This request was already {time_off.status_label.lower()}."
+
+    approver, error = parse_id(form.get("approver_id"), Employee, "approver")
+    if error:
+        return error
+    if approver is None:
+        return "Choose who is making this decision."
+    if approver.id == time_off.employee_id:
+        return "People cannot decide their own time off."
+    if approver not in time_off.approver_choices():
+        manager = time_off.employee.manager
+        if manager is not None and manager.status != "terminated":
+            return f"Only {manager.name}, {time_off.employee.name}'s manager, can decide this request."
+        return f"{approver.name} cannot decide this request."
+
+    time_off.status = decision
+    time_off.decided_by = approver
+    time_off.decided_at = utcnow()
+    return None
 
 
 def validate_department_name(form):

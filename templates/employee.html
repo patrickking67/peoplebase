@@ -63,6 +63,20 @@
         {% endif %}
     </section>
 
-    {% block profile_extra %}{% endblock %}
+    <section class="panel panel-wide" aria-labelledby="time-off-title">
+        <div class="panel-heading">
+            <h2 id="time-off-title">Time off</h2>
+            {% if employee.status != 'terminated' %}<a href="{{ url_for('request_time_off', employee=employee.id) }}">Request time off</a>{% endif %}
+        </div>
+        {% if employee.time_off_requests %}
+        <ul class="plain-list">
+            {% for item in employee.time_off_requests %}
+            <li><span>{{ item.kind_label }}, {{ item.start_date.isoformat() }}{% if item.days > 1 %} to {{ item.end_date.isoformat() }}{% endif %} ({{ item.days }} {{ "day" if item.days == 1 else "days" }})</span><span class="status status-{{ item.status }}">{{ item.status_label }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">No time off recorded.</p>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}
