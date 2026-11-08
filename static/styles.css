@@ -195,6 +195,8 @@ td small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px
 .row-actions form { margin: 0; }
 .row-actions a, .row-actions button { border: 0; color: var(--ink); background: transparent; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 .row-actions button { color: #a01f1f; padding: 0; }
+.pagination { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 24px; font-size: 12px; font-weight: 700; }
+.pagination span[aria-hidden] { color: var(--muted); font-weight: 400; }
 
 .form-layout { grid-template-columns: .85fr 1.15fr; align-items: start; }
 .form-layout form { display: grid; padding: 30px; border: 1px solid var(--line); background: #faf8f2; }

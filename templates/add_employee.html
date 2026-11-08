@@ -4,6 +4,7 @@
 <section class="form-layout">
     <header><p class="eyebrow">New record</p><h1>Add an employee.</h1><p>Create a structured record for the directory.</p></header>
     <form method="post" action="{{ url_for('add_employee') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label for="name">Full name</label>
         <input type="text" name="name" id="name" value="{{ values.get('name', '') }}" maxlength="100" autocomplete="name" required>
         <label for="position">Position</label>

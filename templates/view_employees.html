@@ -20,13 +20,13 @@
         {% if search or selected_position %}<a href="{{ url_for('view_employees') }}">Clear</a>{% endif %}
     </form>
     <div class="summary-grid">
-        <p><strong>{{ employees|length }}</strong><span>Matching records</span></p>
+        <p><strong>{{ matching_count }}</strong><span>Matching records</span></p>
         <p><strong>${{ "{:,.0f}".format(total_payroll) }}</strong><span>Annual payroll</span></p>
         <p><strong>${{ "{:,.0f}".format(average_salary) }}</strong><span>Average salary</span></p>
     </div>
     <a class="export-link" href="{{ url_for('export_employees', q=search, position=selected_position) }}">Export this view as CSV →</a>
 </section>
-{% if employees %}
+{% if pagination.total %}
 <div class="table-wrap">
     <table>
         <thead><tr><th>Name</th><th>Position</th><th>Annual salary</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
@@ -39,6 +39,7 @@
                 <td class="row-actions">
                     <a href="{{ url_for('update_employee', employee_id=employee.id) }}">Edit</a>
                     <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Delete this employee?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit">Delete</button>
                     </form>
                 </td>
@@ -46,6 +47,13 @@
             {% endfor %}
         </tbody>
     </table>
+    {% if pagination.pages > 1 %}
+    <nav class="pagination" aria-label="Directory pages">
+        {% if pagination.has_prev %}<a href="{{ url_for('view_employees', page=pagination.prev_num, **page_args) }}" rel="prev">← Previous</a>{% else %}<span aria-hidden="true">← Previous</span>{% endif %}
+        <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        {% if pagination.has_next %}<a href="{{ url_for('view_employees', page=pagination.next_num, **page_args) }}" rel="next">Next →</a>{% else %}<span aria-hidden="true">Next →</span>{% endif %}
+    </nav>
+    {% endif %}
 </div>
 {% else %}
 <section class="empty-state"><span>0 matches</span><h2>No records found.</h2><p>Clear the filters or add a new employee.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
