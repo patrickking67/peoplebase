@@ -94,7 +94,7 @@
     </div>
     <aside class="stat-card" aria-label="Project summary">
       <span>Test suite</span>
-      <strong>10</strong>
+      <strong>66</strong>
       <p>Isolated integration tests over an application factory. Stored in SQLite by
          default, ready for a production database through <code>DATABASE_URL</code>.</p>
     </aside>
@@ -132,8 +132,8 @@
       </article>
       <article>
         <span>06</span><h3>Careful</h3>
-        <p>Destructive actions are POST-only, and templates are server-rendered,
-           responsive, and accessible.</p>
+        <p>CSRF tokens on every form, POST-only deletes, and CSV cells neutralized
+           against formula injection. Templates are server-rendered and accessible.</p>
       </article>
     </div>
   </div>
@@ -142,31 +142,32 @@
 <section>
   <div class="wrap">
     <h2>Run it locally</h2>
-    <p class="sub">Python 3.9 or newer.</p>
+    <p class="sub">Python 3.11 or newer.</p>
     <pre><code>git clone https://github.com/patrickking67/peoplebase.git
 cd peoplebase
 python3 -m venv .venv &amp;&amp; source .venv/bin/activate
 pip install -r requirements-dev.txt
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 flask --app app run --debug        <span class="cmt"># http://127.0.0.1:5000</span>
 
-pytest -q                          <span class="cmt"># 10 passed</span></code></pre>
+pytest -q                          <span class="cmt"># 66 passed</span></code></pre>
   </div>
 </section>
 
 <section>
   <div class="wrap">
     <h2>Configuration</h2>
-    <p class="sub">Environment variables, all with working defaults.</p>
+    <p class="sub">Environment variables. Only <code>SECRET_KEY</code> is required.</p>
     <table>
       <thead><tr><th>Variable</th><th>Purpose</th><th>Default</th></tr></thead>
       <tbody>
         <tr><td><code>DATABASE_URL</code></td><td>SQLAlchemy connection string</td><td>Local SQLite</td></tr>
-        <tr><td><code>SECRET_KEY</code></td><td>Session and flash-message signing</td><td>Development-only value</td></tr>
+        <tr><td><code>SECRET_KEY</code></td><td>Signs sessions, flash messages and CSRF tokens</td><td>Required, no default</td></tr>
         <tr><td><code>FLASK_DEBUG</code></td><td>Enables debug mode when set to <code>1</code></td><td>Disabled</td></tr>
       </tbody>
     </table>
     <p style="margin:20px 0 0"><span class="note"><strong>Before any public deployment:</strong>
-      set a unique <code>SECRET_KEY</code> and add authentication. PeopleBase ships no
+      use a long random <code>SECRET_KEY</code> and add authentication. PeopleBase ships no
       auth layer by design.</span></p>
   </div>
 </section>

@@ -10,7 +10,7 @@ Use GitHub private vulnerability reporting when available. Otherwise, contact th
 
 ## Deployment notes
 
-- Set a unique `SECRET_KEY` outside development.
+- `SECRET_KEY` is required in every environment. Use a long random value and keep it out of source control.
 - Use a managed database and configure it with `DATABASE_URL` for production.
 - Terminate TLS at the hosting platform and do not enable Flask debug mode publicly.
 - Add authentication and authorization before storing real employee data.

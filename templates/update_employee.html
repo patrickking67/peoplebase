@@ -4,6 +4,7 @@
 <section class="form-layout">
     <header><p class="eyebrow">Record {{ employee.id }}</p><h1>Update employee.</h1><p>Keep the directory accurate and current.</p></header>
     <form method="post" action="{{ url_for('update_employee', employee_id=employee.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label for="name">Full name</label>
         <input type="text" name="name" id="name" value="{{ values.get('name', employee.name) }}" maxlength="100" autocomplete="name" required>
         <label for="position">Position</label>
