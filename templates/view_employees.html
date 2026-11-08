@@ -38,7 +38,7 @@
                 <td>${{ "{:,.2f}".format(employee.salary) }}</td>
                 <td class="row-actions">
                     <a href="{{ url_for('update_employee', employee_id=employee.id) }}">Edit</a>
-                    <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" onsubmit="return confirm('Delete this employee?')">
+                    <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" data-confirm="Delete {{ employee.name }}? This cannot be undone.">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit">Delete</button>
                     </form>

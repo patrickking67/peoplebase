@@ -36,6 +36,18 @@ FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 # its own also accepts "1_000" and non-ASCII digits, which a form should not.
 SALARY_PATTERN = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?", re.ASCII)
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+# Every form in the app is a few short fields; anything bigger is refused with 413.
+MAX_CONTENT_LENGTH = 64 * 1024
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
 
 
 class Employee(db.Model):
@@ -58,6 +70,7 @@ def create_app(test_config=None):
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SAMESITE="Lax",
+        MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
     )
 
     if test_config:
@@ -89,6 +102,12 @@ def create_app(test_config=None):
                 "Reload the page and try again.",
             )
         return None
+
+    @app.after_request
+    def add_security_headers(response):
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        return response
 
     @app.get("/")
     def home():
@@ -154,6 +173,8 @@ def create_app(test_config=None):
         response = make_response(output.getvalue())
         response.headers["Content-Type"] = "text/csv; charset=utf-8"
         response.headers["Content-Disposition"] = "attachment; filename=peoplebase-employees.csv"
+        # Salary data should not sit in shared or browser caches.
+        response.headers["Cache-Control"] = "no-store"
         return response
 
     @app.route("/employees/new", methods=["GET", "POST"])
