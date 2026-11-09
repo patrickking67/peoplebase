@@ -11,6 +11,9 @@ earlier entries are reconstructed from the Git history.
 
 - Departments with headcount, and filters for department and status in the
   directory and CSV export.
+- Renaming a department from the departments page. The new name gets the same
+  checks as a new department: required, trimmed, at most 100 characters, no
+  control characters and unique ignoring case.
 - Reporting lines: a manager per employee, checked for self-management, loops
   and managers who have left, plus an org chart page.
 - Employment status (active, on leave, left) and start dates.

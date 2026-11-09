@@ -80,7 +80,10 @@ keys by default.
 
 `SECRET_KEY` must be set; the factory raises at startup without it. SQLite at
 `instance/employees.db` is the default and `DATABASE_URL` points SQLAlchemy at
-any other database. Tests create an isolated SQLite file per test.
+any other database. Tests create an isolated SQLite file per test. On
+2026-11-09 the schema init, the upgrade of an original employee-only table and
+the full test suite were also run once against PostgreSQL 18 (psycopg 3) with
+no changes needed; CI still runs on SQLite only.
 
 ## Production gaps
 
