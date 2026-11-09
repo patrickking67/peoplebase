@@ -287,6 +287,20 @@ main:focus { outline: none; }
 .plain-list li > span:not(.status) { color: var(--muted); font-size: var(--step--1); }
 .department-list li > a { font-weight: 600; flex: 1; }
 .department-list form { margin: 0; }
+.department-list .rename[open] { order: 1; flex-basis: 100%; }
+.rename summary {
+    width: fit-content;
+    color: var(--brand);
+    font-size: var(--step--1);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    cursor: pointer;
+    list-style: none;
+}
+.rename summary::-webkit-details-marker { display: none; }
+.rename[open] summary { margin-bottom: 8px; }
+.rename-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.rename-form input { flex: 1 1 12rem; width: auto; }
 
 .bar-list li {
     display: grid;

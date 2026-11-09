@@ -331,6 +331,101 @@ def test_department_with_people_is_not_deleted(client, app, csrf_token, org):
     assert count(app, Department) == 2
 
 
+
+def department_name(app, department_id):
+    with app.app_context():
+        return db.session.get(Department, department_id).name
+
+
+def test_department_can_be_renamed(client, app, csrf_token, org):
+    response = client.post(
+        f"/departments/{org['design']}/rename",
+        data={"name": "  Product Design ", "csrf_token": csrf_token},
+        follow_redirects=True,
+    )
+
+    assert b"Renamed Design to Product Design." in response.data
+    assert department_name(app, org["design"]) == "Product Design"
+    with app.app_context():
+        assert db.session.get(Employee, org["sam"]).department_id == org["design"]
+
+
+def test_department_rename_can_change_only_capitalization(client, app, csrf_token, org):
+    response = client.post(
+        f"/departments/{org['design']}/rename",
+        data={"name": "DESIGN", "csrf_token": csrf_token},
+        follow_redirects=True,
+    )
+
+    assert b"Renamed Design to DESIGN." in response.data
+    assert department_name(app, org["design"]) == "DESIGN"
+
+
+def test_department_rename_to_same_name_changes_nothing(client, app, csrf_token, org):
+    response = client.post(
+        f"/departments/{org['design']}/rename",
+        data={"name": "Design", "csrf_token": csrf_token},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Design already has that name." in response.data
+    assert department_name(app, org["design"]) == "Design"
+
+
+@pytest.mark.parametrize(
+    "name,error",
+    [
+        ("", b"Department name is required"),
+        ("   ", b"Department name is required"),
+        ("engineering", b"A department named Engineering already exists"),
+        ("A" * 101, b"100 characters"),
+        ("Ops\tTeam", b"control characters"),
+        ("Ops\x00", b"control characters"),
+    ],
+)
+def test_invalid_department_renames_are_rejected(client, app, csrf_token, org, name, error):
+    response = client.post(
+        f"/departments/{org['design']}/rename", data={"name": name, "csrf_token": csrf_token}
+    )
+
+    assert response.status_code == 400
+    assert error in response.data
+    # The form stays open with what was typed so it can be corrected.
+    assert b'<details class="rename" open>' in response.data
+    assert department_name(app, org["design"]) == "Design"
+
+
+def test_department_rename_accepts_the_length_limit(client, app, csrf_token, org):
+    client.post(f"/departments/{org['design']}/rename", data={"name": "A" * 100, "csrf_token": csrf_token})
+
+    assert department_name(app, org["design"]) == "A" * 100
+
+
+def test_department_rename_requires_csrf(client, app, org):
+    response = client.post(f"/departments/{org['design']}/rename", data={"name": "Studio"})
+
+    assert response.status_code == 400
+    assert department_name(app, org["design"]) == "Design"
+
+
+def test_department_rename_is_post_only(client, org):
+    assert client.get(f"/departments/{org['design']}/rename").status_code == 405
+
+
+def test_renaming_a_missing_department_is_not_found(client, csrf_token):
+    response = client.post("/departments/999/rename", data={"name": "Studio", "csrf_token": csrf_token})
+
+    assert response.status_code == 404
+
+
+def test_department_list_offers_rename(client, org):
+    response = client.get("/departments")
+
+    assert f'action="/departments/{org["design"]}/rename"'.encode() in response.data
+    assert b'<details class="rename" open>' not in response.data
+
+
 # Directory filters
 
 

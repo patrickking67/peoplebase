@@ -27,9 +27,9 @@ strict validation and a test suite that covers each rule.
 
 - **Employee records.** Name, job title, salary, department, manager, start
   date and status (active, on leave, left). Each person has a profile page.
-- **Departments and reporting lines.** Create and remove departments, pick a
-  manager for anyone and see the result as an org chart. Self-management,
-  reporting loops and managers who have left are refused.
+- **Departments and reporting lines.** Create, rename and remove departments,
+  pick a manager for anyone and see the result as an org chart.
+  Self-management, reporting loops and managers who have left are refused.
 - **Compensation history.** Every title or salary change is stored with its
   effective date and reason. Hiring records the starting salary.
 - **Time off.** Requests carry a type, inclusive dates (up to 60 days) and a
@@ -129,7 +129,7 @@ docs/architecture.md    Design notes and production gaps
 ./scripts/check.sh
 ```
 
-That runs `ruff check .`, `pytest -q` (178 tests, each on a fresh SQLite
+That runs `ruff check .`, `pytest -q` (192 tests, each on a fresh SQLite
 database), `scripts/check-ai-config.py` and `scripts/check-text.py`. The suite
 covers:
 

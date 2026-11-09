@@ -447,6 +447,28 @@ def create_app(test_config=None):
         flash(f"Added the {name} department.", "success")
         return redirect(url_for("view_departments"))
 
+    @app.post("/departments/<int:department_id>/rename")
+    def rename_department(department_id):
+        department = db.get_or_404(Department, department_id)
+        name, error = validate_department_name(request.form, department)
+        if error:
+            flash(error, "error")
+            return render_template(
+                "departments.html",
+                departments=department_headcounts(),
+                values={},
+                rename_id=department.id,
+                rename_values=request.form,
+            ), 400
+        if name == department.name:
+            flash(f"{name} already has that name.", "info")
+            return redirect(url_for("view_departments"))
+        old_name = department.name
+        department.name = name
+        db.session.commit()
+        flash(f"Renamed {old_name} to {name}.", "success")
+        return redirect(url_for("view_departments"))
+
     @app.post("/departments/<int:department_id>/delete")
     def delete_department(department_id):
         department = db.get_or_404(Department, department_id)
@@ -819,13 +841,17 @@ def apply_time_off_decision(time_off, form):
     return None
 
 
-def validate_department_name(form):
+def validate_department_name(form, department=None):
+    """Trimmed, non-empty, at most 100 characters, no control characters, and
+    unique ignoring case. When renaming, the department may keep its own name
+    or change only its capitalization."""
     name, error = clean_text(form, "name", "Department name")
     if error:
         return None, error
-    existing = db.session.scalar(
-        db.select(Department).where(db.func.lower(Department.name) == name.lower())
-    )
+    query = db.select(Department).where(db.func.lower(Department.name) == name.lower())
+    if department is not None:
+        query = query.where(Department.id != department.id)
+    existing = db.session.scalar(query)
     if existing is not None:
         return None, f"A department named {existing.name} already exists."
     return name, None
