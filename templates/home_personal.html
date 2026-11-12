@@ -51,16 +51,6 @@
         {% endif %}
     </section>
     {% endif %}
-    {% if policies %}
-    <section class="panel" aria-labelledby="policies-title">
-        <div class="panel-heading"><h2 id="policies-title">Policies waiting for you</h2><a href="{{ url_for('view_policies') }}">All policies</a></div>
-        <ul class="plain-list">
-            {% for policy in policies %}
-            <li><a href="{{ url_for('view_policy', policy_id=policy.id) }}">{{ policy.title }}</a><span class="status status-pending">Needs your acknowledgement</span></li>
-            {% endfor %}
-        </ul>
-    </section>
-    {% endif %}
     {% if employee %}
     <section class="panel panel-wide" aria-labelledby="balances-title">
         <h2 id="balances-title">Your leave, {{ today.year }}</h2>
@@ -79,6 +69,16 @@
         {% else %}
         <p class="quiet">Nothing booked or waiting. <a href="{{ url_for('request_time_off') }}">Request time off</a>.</p>
         {% endif %}
+    </section>
+    {% endif %}
+    {% if policies %}
+    <section class="panel" aria-labelledby="policies-title">
+        <div class="panel-heading"><h2 id="policies-title">Policies waiting for you</h2><a href="{{ url_for('view_policies') }}">All policies</a></div>
+        <ul class="plain-list">
+            {% for policy in policies %}
+            <li><a href="{{ url_for('view_policy', policy_id=policy.id) }}">{{ policy.title }}</a><span class="status status-pending">Needs your acknowledgement</span></li>
+            {% endfor %}
+        </ul>
     </section>
     {% endif %}
 </div>

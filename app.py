@@ -1762,7 +1762,7 @@ DEMO_STAFF = [
     ("Drew Example", "Operations Manager", "Operations", "Morgan Example", "118000", (3, 120), "active"),
     ("Skyler Example", "Support Specialist", "Operations", "Drew Example", "68000", (0, 75), "active"),
     ("Harper Example", "Finance Manager", "Finance", "Morgan Example", "134000", (7, 28), "active"),
-    ("Rowan Example", "Accountant", "Finance", "Harper Example", "86000", (2, 160), "active"),
+    ("Rowan Example", "Accountant", "Finance", "Harper Example", "86000", (0, 215), "active"),
     ("Emerson Example", "People Partner", "People", "Morgan Example", "104000", (3, -1), "active"),
     ("Parker Example", "Recruiter", "People", "Emerson Example", "79000", (4, 300), "terminated"),
 ]

@@ -391,15 +391,16 @@ input[type="date"] { min-width: 0; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
 th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { color: var(--muted); font-size: var(--step--1); font-weight: 600; white-space: nowrap; }
-tbody tr:last-child td { border-bottom: 0; }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
 tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 45%, transparent); }
 th.num, td.num { text-align: right; }
 .table-scroll th:first-child, .table-scroll td:first-child { padding-left: 0; }
 td small { display: block; color: var(--muted); font-size: 0.8125rem; }
 .person-link { font-weight: 600; color: var(--ink); text-decoration: none; }
 .person-link:hover { color: var(--brand); text-decoration: underline; }
-.row-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; white-space: nowrap; font-size: var(--step--1); }
-.row-actions form { margin: 0; }
+/* A table cell must stay a table cell, or its border drifts off the row. */
+.row-actions { text-align: right; white-space: nowrap; font-size: var(--step--1); }
+.row-actions > * { display: inline-block; margin: 0 0 0 16px; vertical-align: middle; }
 
 .pagination {
     display: flex;
@@ -566,6 +567,10 @@ legend + * { clear: both; }
 
 /* Account menu, roles and sign-in */
 
+/* Two tiers: who you are on the brand row, where you can go underneath.
+   The nav differs by role, so it gets the full width to itself. */
+.site-header { gap: 10px 32px; padding-bottom: 0; }
+.site-header .site-nav { order: 3; flex-basis: 100%; margin: 0 -12px; padding-bottom: 8px; }
 .account-menu {
     display: flex;
     flex-wrap: wrap;
@@ -574,6 +579,7 @@ legend + * { clear: both; }
     margin-left: auto;
     font-size: var(--step--1);
 }
+.site-header:not(:has(.site-nav)) { padding-bottom: 14px; }
 .account-menu form { margin: 0; }
 .account-who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; }
 .account-who a { color: var(--ink); text-decoration: none; }
@@ -688,7 +694,7 @@ textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; b
 /* Leave balances */
 
 .balance-table th[scope="row"] { color: var(--ink); font-size: inherit; padding-left: 0; }
-.balance-table td:last-child strong { font-size: var(--step-1); }
+.balance-available strong { font-size: var(--step-1); }
 .balance-short strong { color: var(--danger); }
 .request-short { color: var(--ink); font-size: var(--step--1); padding-left: 10px; border-left: 3px solid var(--marigold); }
 .form-aside h2 { margin-top: 28px; margin-bottom: 8px; }
@@ -708,3 +714,10 @@ textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; b
     .facts-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .bar-cell { display: none; }
 }
+
+.account-form { grid-template-columns: minmax(200px, 1.4fr) minmax(200px, 1.2fr) minmax(140px, 0.8fr) auto; }
+.account-form + .hint { margin-top: 14px; }
+@media (max-width: 960px) { .account-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .account-form { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .filter-form-short { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .filter-form-short { grid-template-columns: 1fr; } }

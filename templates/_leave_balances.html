@@ -2,19 +2,19 @@
 <div class="table-scroll">
     <table class="balance-table">
         <caption class="visually-hidden">Leave balances for {{ today.year }}, in working days</caption>
-        <thead><tr><th scope="col">Type</th><th scope="col" class="num">This year</th><th scope="col" class="num">Accrued so far</th><th scope="col" class="num">Used</th><th scope="col" class="num">Pending</th><th scope="col" class="num">Available</th></tr></thead>
+        <thead><tr><th scope="col">Type</th><th scope="col" class="num">Available</th><th scope="col" class="num">Accrued so far</th><th scope="col" class="num">Used</th><th scope="col" class="num">Pending</th><th scope="col" class="num">This year</th></tr></thead>
         <tbody>
             {% for balance in person.leave_balances(today) %}
             <tr>
                 <th scope="row">{{ TIME_OFF_KINDS[balance.kind] }}</th>
-                <td class="num">{{ balance.entitlement|days }}</td>
+                <td class="num balance-available{% if balance.available < 0 %} balance-short{% endif %}"><strong>{{ balance.available|days }}</strong></td>
                 <td class="num">{{ balance.accrued|days }}</td>
                 <td class="num">{{ balance.used|days }}</td>
                 <td class="num">{{ balance.pending|days }}</td>
-                <td class="num{% if balance.available < 0 %} balance-short{% endif %}"><strong>{{ balance.available|days }}</strong></td>
+                <td class="num">{{ balance.entitlement|days }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-<p class="quiet hint">Working days, Monday to Friday. Vacation and sick leave accrue a twelfth of the year's allowance each month; personal days arrive at the start of the year. Pending requests are held back until they are decided.</p>
+<p class="quiet hint">Working days, Monday to Friday. Vacation and sick leave accrue a twelfth of the year's allowance each month; personal days arrive at the start of the year. Available is what has accrued, less what is used and what is pending.</p>

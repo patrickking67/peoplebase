@@ -249,8 +249,9 @@ def test_profile_shows_balances_with_accrual(app, sign_in, casey_leave):
     page = sign_in("casey@peoplebase.test").get(f"/employees/{casey_leave}").data
 
     assert b"Leave balances, 2026" in page
-    assert balance_row(page, "Vacation") == ["20", "18.33", "5", "2", "11.33"]
-    assert balance_row(page, "Sick leave") == ["10", "9.17", "0", "0", "9.17"]
+    # Available, then how it is reached: accrued, used, pending, and the year's allowance.
+    assert balance_row(page, "Vacation") == ["11.33", "18.33", "5", "2", "20"]
+    assert balance_row(page, "Sick leave") == ["9.17", "9.17", "0", "0", "10"]
     assert balance_row(page, "Personal") == ["3", "3", "0", "0", "3"]
 
 
@@ -263,8 +264,8 @@ def test_balances_follow_profile_access(app, sign_in, casey_leave):
 def test_dashboard_and_request_form_show_your_own_balances(app, sign_in, casey_leave):
     casey = sign_in("casey@peoplebase.test")
 
-    assert balance_row(casey.get("/").data, "Vacation") == ["20", "18.33", "5", "2", "11.33"]
-    assert balance_row(casey.get("/time-off/new").data, "Vacation")[-1] == "11.33"
+    assert balance_row(casey.get("/").data, "Vacation") == ["11.33", "18.33", "5", "2", "20"]
+    assert balance_row(casey.get("/time-off/new").data, "Vacation")[0] == "11.33"
     assert b"Your leave, 2026" not in sign_in("emerson@peoplebase.test").get("/time-off/new").data
 
 
