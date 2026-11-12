@@ -1,9 +1,11 @@
+import re
 from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
 
 from app import (
+    Account,
     Department,
     Employee,
     TimeOffRequest,
@@ -13,6 +15,7 @@ from app import (
     headcount_by_department,
     upcoming_anniversaries,
 )
+from tests.conftest import sign_in_client
 
 
 def person(id, name, start_date=None, manager_id=None, department=None):
@@ -155,12 +158,12 @@ def test_dashboard_excludes_people_who_have_left_from_headcount(client, staffed)
     assert b"Former Example" not in response.data
 
 
-def test_empty_dashboard(app):
+def test_empty_dashboard(app, client):
     with app.app_context():
         db.session.delete(db.session.get(Employee, 1))
         db.session.commit()
 
-    response = app.test_client().get("/")
+    response = client.get("/")
 
     assert response.status_code == 200
     assert b"0 people at work." in response.data
@@ -181,12 +184,15 @@ def test_org_chart_shows_reporting_lines(client, staffed):
 # Demo data
 
 
-def test_seed_demo_fills_an_empty_database(app):
+def seed_demo(app):
     with app.app_context():
         db.session.delete(db.session.get(Employee, 1))
         db.session.commit()
+    return app.test_cli_runner().invoke(args=["seed-demo"])
 
-    result = app.test_cli_runner().invoke(args=["seed-demo"])
+
+def test_seed_demo_fills_an_empty_database(app):
+    result = seed_demo(app)
 
     assert result.exit_code == 0, result.output
     assert "Added 13 demo employees in 5 departments and 5 time-off requests." in result.output
@@ -197,9 +203,42 @@ def test_seed_demo_fills_an_empty_database(app):
         assert [change.reason for change in jordan.compensation_history] == ["Promotion", "Hired"]
         assert jordan.manager.name == "Riley Example"
 
-    client = app.test_client()
-    for path in ["/", "/employees", "/org", "/departments", "/time-off"]:
-        assert client.get(path).status_code == 200
+
+def test_seed_demo_creates_fake_accounts_and_prints_their_password(app):
+    result = seed_demo(app)
+
+    password = re.search(r"password: (\S+)", result.output).group(1)
+    assert "Created 12 demo accounts" in result.output
+    assert "emerson@peoplebase.example" in result.output
+    with app.app_context():
+        accounts = db.session.scalars(db.select(Account).where(Account.email.endswith("@peoplebase.example"))).all()
+        roles = {account.email.split("@")[0]: account.role for account in accounts}
+        # The printed password is the only copy: the database holds Argon2id hashes.
+        assert all(account.password_hash.startswith("$argon2id$") for account in accounts)
+        assert all(password not in account.password_hash for account in accounts)
+    assert len(roles) == 12
+    assert roles["emerson"] == "admin"
+    assert roles["riley"] == roles["morgan"] == "manager"
+    assert roles["casey"] == "employee"
+    assert "parker" not in roles  # Parker has left, so there is no sign-in.
+
+    hr = sign_in_client(app, "emerson@peoplebase.example", password)
+    for path in ["/", "/employees", "/org", "/departments", "/time-off", "/accounts"]:
+        assert hr.get(path).status_code == 200
+    casey = sign_in_client(app, "casey@peoplebase.example", password)
+    assert casey.get("/").status_code == 200
+    assert casey.get("/accounts").status_code == 403
+
+
+def test_seed_demo_password_differs_between_runs(app, tmp_path):
+    first = re.search(r"password: (\S+)", seed_demo(app).output).group(1)
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+    second = re.search(r"password: (\S+)", app.test_cli_runner().invoke(args=["seed-demo"]).output).group(1)
+
+    assert first != second
+    assert len(first) >= 12
 
 
 def test_seed_demo_refuses_a_database_with_people(app):

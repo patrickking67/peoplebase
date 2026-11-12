@@ -563,3 +563,58 @@ legend + * { clear: both; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Account menu, roles and sign-in */
+
+.account-menu {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin-left: auto;
+    font-size: var(--step--1);
+}
+.account-menu form { margin: 0; }
+.account-who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; }
+.account-who a { color: var(--ink); text-decoration: none; }
+.account-who a:hover { color: var(--brand); text-decoration: underline; }
+.account-menu > a { color: var(--muted); }
+.account-menu > a[aria-current="page"] { color: var(--brand); }
+
+/* A role is a property of the account, so it reads as a tag, not a status. */
+.role {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+.role-admin { color: var(--brand); border-color: currentColor; }
+.role-manager { color: var(--ink); border-color: var(--marigold); box-shadow: inset 3px 0 0 var(--marigold); }
+
+.sign-in { max-width: 30rem; margin: 0 auto; padding-top: clamp(40px, 10vh, 96px); display: grid; gap: 18px; }
+.sign-in .lede { margin-top: 0; }
+.stacked-form label + input, .stacked-form label + select { margin-bottom: 14px; }
+.hint { margin-top: 4px; font-size: var(--step--1); }
+
+.issued { margin-bottom: 20px; border-left: 4px solid var(--marigold); }
+.issued p + p { margin-top: 12px; }
+.secret {
+    display: inline-block;
+    padding: 8px 14px;
+    background: var(--marigold-soft);
+    border-radius: var(--radius-control);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--step-1);
+    letter-spacing: 0.02em;
+    user-select: all;
+    overflow-wrap: anywhere;
+}
+.inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+.inline-form select { width: auto; min-width: 8.5rem; }
+div.org-node:hover { border-color: var(--line); }
+.flash-info { color: var(--ink); background: var(--brand-soft); border-color: var(--line-strong); }

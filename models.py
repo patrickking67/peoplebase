@@ -4,6 +4,7 @@ Kept apart from app.py so the policy and reporting modules can use the models
 without importing the Flask routes.
 """
 
+import secrets
 from datetime import UTC, datetime
 
 from flask_sqlalchemy import SQLAlchemy
@@ -114,14 +115,53 @@ class TimeOffRequest(db.Model):
     def status_label(self):
         return TIME_OFF_STATUSES.get(self.status, self.status)
 
-    def approver_choices(self):
-        """Who may decide this request: the direct manager, or when there is no
-        current manager, anyone else who still works here."""
-        manager = self.employee.manager
-        if manager is not None and manager.status != "terminated":
-            return [manager]
-        return db.session.scalars(
-            db.select(Employee)
-            .where(Employee.id != self.employee_id, Employee.status != "terminated")
-            .order_by(Employee.name, Employee.id)
-        ).all()
+
+ROLES = {"employee": "Employee", "manager": "Manager", "admin": "HR admin"}
+
+
+def new_session_nonce():
+    return secrets.token_urlsafe(16)
+
+
+class Account(db.Model):
+    """A sign-in. Linked to at most one employee; HR admins may stand alone."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(254), nullable=False, unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="employee")
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    # True while the password is one HR or the CLI handed out.
+    must_change_password = db.Column(db.Boolean, nullable=False, default=True)
+    # Copied into the session cookie at sign-in. Rotating it signs the account
+    # out everywhere, which a signed client-side cookie cannot do on its own.
+    session_nonce = db.Column(db.String(32), nullable=False, default=new_session_nonce)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
+    employee = db.relationship("Employee", backref=db.backref("account", uselist=False))
+
+    @property
+    def role_label(self):
+        return ROLES.get(self.role, self.role)
+
+    @property
+    def display_name(self):
+        return self.employee.name if self.employee else self.email
+
+    def end_sessions(self):
+        self.session_nonce = new_session_nonce()
+
+    def __repr__(self):
+        return f"<Account {self.email}>"
+
+
+class LoginThrottle(db.Model):
+    """Failed sign-ins per key. A key is "email:<address>" or "ip:<address>",
+    so guessing is slowed the same way whether or not the account exists."""
+
+    key = db.Column(db.String(300), primary_key=True)
+    failures = db.Column(db.Integer, nullable=False, default=0)
+    window_started_at = db.Column(db.DateTime, nullable=False)
+    locked_until = db.Column(db.DateTime, nullable=True)

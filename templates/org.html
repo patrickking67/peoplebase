@@ -5,11 +5,13 @@
     {% for node in nodes %}
     {% set person = node.employee %}
     <li>
-        <a class="org-node" href="{{ url_for('employee_profile', employee_id=person.id) }}">
+        {% set open = access.can_view_profile(person) %}
+        <{{ 'a' if open else 'div' }} class="org-node"{% if open %} href="{{ url_for('employee_profile', employee_id=person.id) }}"{% endif %}>
             <strong>{{ person.name }}</strong>
             <span>{{ person.position }}{% if person.department %}, {{ person.department.name }}{% endif %}</span>
-            {% if person.status != 'active' %}<span class="status status-{{ person.status }}">{{ person.status_label }}</span>{% endif %}
-        </a>
+            {# Leave status is shown only to people who may open the profile. #}
+            {% if open and person.status != 'active' %}<span class="status status-{{ person.status }}">{{ person.status_label }}</span>{% endif %}
+        </{{ 'a' if open else 'div' }}>
         {% if node.reports %}{{ branch(node.reports) }}{% endif %}
     </li>
     {% endfor %}
@@ -17,13 +19,13 @@
 {% endmacro %}
 {% block content %}
 <section class="page-heading">
-    <div><h1>Org chart</h1><p class="lede">Who reports to whom, for the {{ total }} {{ "person" if total == 1 else "people" }} on staff. Set someone's manager on their record to move them.</p></div>
+    <div><h1>Org chart</h1><p class="lede">Who reports to whom, for the {{ total }} {{ "person" if total == 1 else "people" }} on staff. {% if access.is_admin %}Set someone's manager on their record to move them.{% endif %}</p></div>
 </section>
 {% if roots %}
 <nav class="org-tree" aria-label="Reporting lines">
     {{ branch(roots) }}
 </nav>
 {% else %}
-<section class="empty-state"><h2>No one on staff yet.</h2><p>Add employees and set their managers to build the chart.</p><a class="button" href="{{ url_for('add_employee') }}">Add employee</a></section>
+<section class="empty-state"><h2>No one on staff yet.</h2><p>The chart fills in as HR adds people and sets their managers.</p></section>
 {% endif %}
 {% endblock %}

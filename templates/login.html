@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Sign in | PeopleBase{% endblock %}
+{% block content %}
+<section class="sign-in" aria-labelledby="sign-in-title">
+    <h1 id="sign-in-title">Sign in to PeopleBase.</h1>
+    <p class="lede">Use the email and password HR gave you. A first password is temporary, and you choose your own right after signing in.</p>
+    <form class="stacked-form panel" method="post" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <label for="email">Email</label>
+        <input type="email" name="email" id="email" value="{{ email }}" maxlength="254" autocomplete="username" required autofocus>
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" maxlength="128" autocomplete="current-password" required>
+        <div class="form-actions"><button class="button" type="submit">Sign in</button></div>
+    </form>
+    <p class="quiet">Locked out or forgot your password? Ask an HR admin to reset it. Five wrong tries lock sign-in for that email for 15 minutes.</p>
+</section>
+{% endblock %}

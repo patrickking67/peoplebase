@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from app import Employee, TimeOffRequest, db
+from tests.conftest import csrf_from
 
 
 @pytest.fixture()
@@ -149,113 +150,59 @@ def test_time_off_requires_csrf(client, app, team, pending):
     assert get_request(app, pending)["status"] == "pending"
 
 
-# Deciding
+# Deciding. The signed-in account decides; tests/test_access.py covers who may.
 
 
-def test_manager_can_approve(client, app, csrf_token, pending, team):
-    response = client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "approve", "approver_id": str(team["morgan"]), "csrf_token": csrf_token},
+def decide(client, request_id, decision="approve", **extra):
+    return client.post(
+        f"/time-off/{request_id}/decide",
+        data={"decision": decision, "csrf_token": csrf_from(client, "/time-off"), **extra},
         follow_redirects=True,
     )
+
+
+def test_hr_can_approve(client, app, pending):
+    response = decide(client, pending)
 
     assert b"Approved Riley Example&#39;s time off from 2026-12-21" in response.data
     item = get_request(app, pending)
     assert item["status"] == "approved"
-    assert item["decided_by_id"] == team["morgan"]
     assert item["decided_at"] is not None
 
 
-def test_manager_can_deny(client, app, csrf_token, pending, team):
-    client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "deny", "approver_id": str(team["morgan"]), "csrf_token": csrf_token},
-    )
+def test_hr_can_deny(client, app, pending):
+    decide(client, pending, "deny")
 
     assert get_request(app, pending)["status"] == "denied"
 
 
-@pytest.mark.parametrize(
-    "who,error",
-    [
-        ("riley", b"cannot decide their own time off"),
-        ("sam", b"Only Morgan Example, Riley Example&#39;s manager, can decide"),
-        ("avery", b"Only Morgan Example"),
-    ],
-)
-def test_only_the_manager_can_decide(client, app, csrf_token, pending, team, who, error):
-    response = client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "approve", "approver_id": str(team[who]), "csrf_token": csrf_token},
-        follow_redirects=True,
-    )
-
-    assert error in response.data
-    assert get_request(app, pending)["status"] == "pending"
-
-
-@pytest.mark.parametrize(
-    "data,error",
-    [
-        ({"decision": "maybe", "approver_id": "2"}, b"Choose approve or deny"),
-        ({"decision": "approve", "approver_id": ""}, b"Choose who is making this decision"),
-        ({"decision": "approve", "approver_id": "999"}, b"valid approver"),
-    ],
-)
-def test_invalid_decisions_are_rejected(client, app, csrf_token, pending, data, error):
-    response = client.post(
-        f"/time-off/{pending}/decide", data={**data, "csrf_token": csrf_token}, follow_redirects=True
-    )
-
-    assert error in response.data
-    assert get_request(app, pending)["status"] == "pending"
-
-
-def test_decided_requests_cannot_be_decided_again(client, app, csrf_token, pending, team):
-    form = {"approver_id": str(team["morgan"]), "csrf_token": csrf_token}
-    client.post(f"/time-off/{pending}/decide", data={**form, "decision": "approve"})
-
-    response = client.post(
-        f"/time-off/{pending}/decide", data={**form, "decision": "deny"}, follow_redirects=True
-    )
-
-    assert b"already approved" in response.data
-    assert get_request(app, pending)["status"] == "approved"
-
-
-def test_anyone_else_can_decide_for_someone_without_a_manager(client, app, csrf_token, team):
+def test_decision_records_the_deciding_employee(app, sign_in, staff):
     with app.app_context():
         item = TimeOffRequest(
-            employee_id=team["sam"], kind="sick", start_date=date(2026, 11, 2), end_date=date(2026, 11, 2)
+            employee_id=staff["casey"], kind="vacation", start_date=date(2026, 12, 21), end_date=date(2026, 12, 24)
         )
         db.session.add(item)
         db.session.commit()
         item_id = item.id
 
-    client.post(
-        f"/time-off/{item_id}/decide",
-        data={"decision": "approve", "approver_id": str(team["avery"]), "csrf_token": csrf_token},
-    )
+    decide(sign_in("riley@peoplebase.test"), item_id)
 
-    assert get_request(app, item_id)["decided_by_id"] == team["avery"]
+    assert get_request(app, item_id)["decided_by_id"] == staff["riley"]
 
 
-def test_terminated_manager_hands_decision_to_others(client, app, csrf_token, pending, team):
-    with app.app_context():
-        db.session.get(Employee, team["morgan"]).status = "terminated"
-        db.session.commit()
+def test_invalid_decision_is_rejected(client, app, pending):
+    response = decide(client, pending, "maybe")
 
-    blocked = client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "approve", "approver_id": str(team["morgan"]), "csrf_token": csrf_token},
-    )
+    assert b"Choose approve or deny" in response.data
     assert get_request(app, pending)["status"] == "pending"
-    assert blocked.status_code == 302
 
-    client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "approve", "approver_id": str(team["sam"]), "csrf_token": csrf_token},
-    )
+
+def test_decided_requests_cannot_be_decided_again(client, app, pending):
+    decide(client, pending, "approve")
+
+    response = decide(client, pending, "deny")
+
+    assert b"already approved" in response.data
     assert get_request(app, pending)["status"] == "approved"
 
 
@@ -277,16 +224,16 @@ def test_list_shows_requests_and_filters_by_status(client, app, pending, team):
     approved_only = client.get("/time-off?status=approved")
 
     assert b"Riley Example" in everything.data
-    assert b"Decided by" in everything.data
+    assert b'value="approve"' in everything.data
     assert b"Riley Example" not in approved_only.data
     assert b"No approved requests" in approved_only.data
 
 
-def test_pending_request_offers_only_the_manager(client, pending, team):
+def test_decision_form_has_no_approver_field(client, pending):
     response = client.get("/time-off")
 
-    assert f'<option value="{team["morgan"]}">Morgan Example</option>'.encode() in response.data
-    assert b'<option value="1">Avery Example</option>' not in response.data
+    assert b"approver_id" not in response.data
+    assert b"Decided by" not in response.data
 
 
 def test_profile_lists_time_off(client, pending, team):
@@ -296,16 +243,18 @@ def test_profile_lists_time_off(client, pending, team):
 
 
 def test_deleting_people_removes_or_keeps_their_requests(client, app, csrf_token, pending, team):
-    client.post(
-        f"/time-off/{pending}/decide",
-        data={"decision": "approve", "approver_id": str(team["morgan"]), "csrf_token": csrf_token},
-    )
+    with app.app_context():
+        item = db.session.get(TimeOffRequest, pending)
+        item.status = "approved"
+        item.decided_by_id = team["morgan"]
+        db.session.commit()
+    assert b"Approved by Morgan Example." in client.get("/time-off").data
 
     client.post(f"/employees/{team['morgan']}/delete", data={"csrf_token": csrf_token})
     item = get_request(app, pending)
     assert item["status"] == "approved"
     assert item["decided_by_id"] is None
-    assert b"Approved by a former employee" in client.get("/time-off").data
+    assert b"Approved." in client.get("/time-off").data
 
     client.post(f"/employees/{team['riley']}/delete", data={"csrf_token": csrf_token})
     assert request_count(app) == 0

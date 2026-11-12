@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app import Employee, db
+from tests.conftest import HR_EMAIL, sign_in_client
 
 
 def test_home_reports_employee_count(client):
@@ -158,7 +159,7 @@ def test_unexpected_errors_show_a_generic_page(app):
     def boom():
         raise RuntimeError("secret internal detail")
 
-    response = app.test_client().get("/boom")
+    response = sign_in_client(app, HR_EMAIL).get("/boom")
 
     assert response.status_code == 500
     assert b"Internal Server Error" in response.data

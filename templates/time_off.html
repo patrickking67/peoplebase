@@ -2,7 +2,7 @@
 {% block title %}Time off | PeopleBase{% endblock %}
 {% block content %}
 <section class="page-heading">
-    <div><h1>Time off</h1><p class="lede">Requests go to the person's manager. Someone without a manager can be approved by any other current employee.</p></div>
+    <div><h1>Time off</h1><p class="lede">{% if access.is_admin %}Every request in the company. HR can decide any of them except their own.{% elif access.is_manager %}Your own requests and those of everyone who reports up to you. You decide theirs; your manager or HR decides yours.{% else %}Your requests. Your manager or HR approves or denies them.{% endif %}</p></div>
     <div class="heading-actions"><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></div>
 </section>
 <nav class="tabs" aria-label="Filter requests by status">
@@ -19,29 +19,23 @@
             <p class="request-who"><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a> <span class="status status-{{ item.status }}">{{ item.status_label }}</span></p>
             <p class="request-when">{{ item.kind_label }}, <time datetime="{{ item.start_date.isoformat() }}">{{ item.start_date.isoformat() }}</time>{% if item.days > 1 %} to <time datetime="{{ item.end_date.isoformat() }}">{{ item.end_date.isoformat() }}</time>{% endif %} <span class="quiet">({{ item.days }} {{ "day" if item.days == 1 else "days" }})</span></p>
             {% if item.note %}<p class="request-note">{{ item.note }}</p>{% endif %}
-            {% if item.status != 'pending' %}<p class="quiet">{{ item.status_label }} by {{ item.decided_by.name if item.decided_by else "a former employee" }}.</p>{% endif %}
+            {% if item.status != 'pending' %}<p class="quiet">{{ item.status_label }}{% if item.decided_by %} by {{ item.decided_by.name }}{% endif %}.</p>{% endif %}
         </div>
-        {% if item.status == 'pending' %}
-        {% set choices = item.approver_choices() %}
+        {% if item.status == 'pending' and access.can_decide_time_off(item) %}
         <form class="decision-form" method="post" action="{{ url_for('decide_time_off', request_id=item.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label for="approver-{{ item.id }}">Decided by</label>
-            <select id="approver-{{ item.id }}" name="approver_id" required>
-                {% if choices|length != 1 %}<option value="">Choose a person</option>{% endif %}
-                {% for person in choices %}
-                <option value="{{ person.id }}">{{ person.name }}</option>
-                {% endfor %}
-            </select>
             <div class="decision-buttons">
-                <button class="button" type="submit" name="decision" value="approve">Approve</button>
-                <button class="button button-quiet" type="submit" name="decision" value="deny">Deny</button>
+                <button class="button" type="submit" name="decision" value="approve">Approve<span class="visually-hidden"> {{ item.employee.name }}'s request</span></button>
+                <button class="button button-quiet" type="submit" name="decision" value="deny">Deny<span class="visually-hidden"> {{ item.employee.name }}'s request</span></button>
             </div>
         </form>
+        {% elif item.status == 'pending' %}
+        <p class="quiet">Waiting for a decision.</p>
         {% endif %}
     </li>
     {% endfor %}
 </ul>
 {% else %}
-<section class="empty-state"><h2>No {{ TIME_OFF_STATUSES[selected_status]|lower if selected_status else "" }} requests.</h2><p>When someone needs a day off, record it here so their manager can approve it.</p><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></section>
+<section class="empty-state"><h2>No {{ TIME_OFF_STATUSES[selected_status]|lower if selected_status else "" }} requests.</h2><p>Time off shows up here once it is requested.</p><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></section>
 {% endif %}
 {% endblock %}

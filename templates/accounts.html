@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Accounts | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Accounts</h1><p class="lede">Who can sign in and what they can reach. A role grants a capability; the reporting line decides whose records it covers.</p></div>
+</section>
+{% if issued %}
+<section class="panel issued" aria-labelledby="issued-title">
+    <h2 id="issued-title">Temporary password for {{ issued[0].email }}</h2>
+    <p>Pass this on in person or over a private channel. It is shown once, and {{ issued[0].display_name }} must replace it at first sign-in.</p>
+    <p><code class="secret">{{ issued[1] }}</code></p>
+</section>
+{% endif %}
+<div class="split">
+    <section class="panel" aria-labelledby="account-list-title">
+        <h2 id="account-list-title">All accounts</h2>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Sign-in</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    {% for account in accounts %}
+                    {% set own = account.id == current_account.id %}
+                    <tr>
+                        <td>
+                            {% if account.employee %}<a class="person-link" href="{{ url_for('employee_profile', employee_id=account.employee_id) }}">{{ account.employee.name }}</a>{% else %}<span class="person-link">No employee record</span>{% endif %}
+                            <small>{{ account.email }}</small>
+                        </td>
+                        <td>
+                            {% if own %}
+                            <span class="role role-{{ account.role }}">{{ account.role_label }}</span>
+                            {% else %}
+                            <form class="inline-form" method="post" action="{{ url_for('change_account_role', account_id=account.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <label class="visually-hidden" for="role-{{ account.id }}">Role for {{ account.email }}</label>
+                                <select id="role-{{ account.id }}" name="role">
+                                    {% for key, label in ROLES.items() %}<option value="{{ key }}"{% if key == account.role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                                </select>
+                                <button class="link-button" type="submit">Save role</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not account.active %}<span class="status status-terminated">Off</span>
+                            {% elif account.id in locked %}<span class="status status-pending">Locked</span>
+                            {% elif account.must_change_password %}<span class="status status-pending">Temporary password</span>
+                            {% else %}<span class="status status-active">Active</span>{% endif %}
+                            <small>{% if account.last_login_at %}Last sign-in {{ account.last_login_at.strftime('%Y-%m-%d %H:%M') }} UTC{% else %}Never signed in{% endif %}</small>
+                        </td>
+                        <td class="row-actions">
+                            {% if own %}<span class="quiet">This is you</span>{% else %}
+                            <form method="post" action="{{ url_for('reset_account_password', account_id=account.id) }}" data-confirm="Reset the password for {{ account.email }}? They are signed out everywhere.">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="link-button" type="submit">Reset password</button>
+                            </form>
+                            <form method="post" action="{{ url_for('set_account_active', account_id=account.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="active" value="{{ '0' if account.active else '1' }}">
+                                <button class="link-button{% if account.active %} link-danger{% endif %}" type="submit">{{ "Turn off" if account.active else "Turn on" }}</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" aria-labelledby="account-form-title">
+        <h2 id="account-form-title">Create an account</h2>
+        <form class="stacked-form" method="post" action="{{ url_for('add_account') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="account-employee">Employee</label>
+            <select id="account-employee" name="employee_id">
+                <option value="">No employee record (HR admin only)</option>
+                {% for employee in employees %}
+                <option value="{{ employee.id }}"{% if values.get('employee_id') == employee.id|string %} selected{% endif %}>{{ employee.name }} ({{ employee.position }})</option>
+                {% endfor %}
+            </select>
+            <label for="account-email">Email</label>
+            <input type="email" id="account-email" name="email" value="{{ values.get('email', '') }}" maxlength="254" autocomplete="off" required>
+            <label for="account-role">Role</label>
+            <select id="account-role" name="role">
+                {% for key, label in ROLES.items() %}<option value="{{ key }}"{% if values.get('role', 'employee') == key %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <p class="quiet hint">PeopleBase generates a temporary password and shows it to you once.</p>
+            <div class="form-actions"><button class="button" type="submit">Create account</button></div>
+        </form>
+    </section>
+</div>
+{% endblock %}
