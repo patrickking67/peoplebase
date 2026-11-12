@@ -1,7 +1,8 @@
 # Contributing
 
-Thanks for helping. PeopleBase stays small on purpose, so changes should keep
-the code readable in one sitting.
+Thanks for helping. PeopleBase stays small on purpose. Its access rules are
+the point of the project, so read [docs/security.md](docs/security.md) before
+changing who can see or do something.
 
 ## Setup
 
@@ -13,9 +14,8 @@ python3 -m venv .venv
 ./scripts/check.sh
 ```
 
-Run the app with `./scripts/dev.sh` (port 4104, fake development key) after
-loading demo data with
-`SECRET_KEY=dev-only-not-secret .venv/bin/flask --app app seed-demo`.
+Run the app with `./scripts/dev.sh --demo` (port 4104, fake development key).
+It creates the tables, loads the demo company and prints three sign-ins.
 
 ## Branches
 
@@ -37,8 +37,13 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`,
 
 - `./scripts/check.sh` passes locally.
 - New or changed behavior has tests, including the error paths.
+- A new route has a row in `ROUTES` in `tests/test_access.py`, and a change to
+  records, pay, roles or time off writes an audit entry.
+- A model change comes with a migration in `migrations/versions/` that also
+  downgrades.
+- UI changes were checked as each role they affect.
 - UI changes were checked at desktop width and at 375px, in light and dark mode.
-- README, `AGENTS.md` and `CHANGELOG.md` (`[Unreleased]`) are updated.
+- README, `AGENTS.md`, `docs/` and `CHANGELOG.md` (`[Unreleased]`) are updated.
 - No secrets, `.env` files or real employee data.
 
 Report security problems privately through

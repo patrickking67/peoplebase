@@ -62,7 +62,10 @@ the next page load.
 ## Abuse cases
 
 Each row is something an attacker or a curious colleague might try, and what
-the server does about it.
+the server does about it. The tests live in `tests/test_access.py` (cases
+1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
+`tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
+`tests/test_policies.py` (15, 16) and `tests/test_reports.py` (7).
 
 | # | Abuse case | Control |
 | --- | --- | --- |

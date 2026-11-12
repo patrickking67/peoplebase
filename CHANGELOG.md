@@ -9,30 +9,52 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
-- Departments with headcount, and filters for department and status in the
-  directory and CSV export.
-- Renaming a department from the departments page. The new name gets the same
-  checks as a new department: required, trimmed, at most 100 characters, no
-  control characters and unique ignoring case.
-- Reporting lines: a manager per employee, checked for self-management, loops
-  and managers who have left, plus an org chart page.
-- Employment status (active, on leave, left) and start dates.
-- Compensation history with effective dates and reasons, shown on a new
-  employee profile page.
-- Time-off requests with overlap checks and a manager approval rule.
-- A people dashboard: who is at work, headcount by department, upcoming work
-  anniversaries, who is out today and pending requests.
-- `flask --app app seed-demo` for clearly fake demo data.
-- In-place schema upgrade for databases created by earlier versions.
-- Security headers (CSP without inline script, nosniff, frame denial,
-  Referrer-Policy, Permissions-Policy), a 64 KiB request limit and
-  `Cache-Control: no-store` on the CSV export.
-- Error pages in the app layout for 400, 404, 405, 413 and 500.
-- New logo, mark and favicon set, a redesigned UI with light and dark themes,
-  and a rebuilt landing page with a regenerated social preview.
-- `scripts/check.sh` (ruff, pytest, repo checks), `scripts/dev.sh`,
-  `.claude/launch.json`, `llms.txt`, CONTRIBUTING, CODEOWNERS, Dependabot,
-  issue and PR templates, `.editorconfig` and `.gitattributes`.
+- Sign-in with three roles: employee, manager and HR admin. Passwords are
+  hashed with Argon2id (argon2-cffi). Sessions are cleared at sign-in, can be
+  revoked through a per-account nonce and end after 12 hours.
+- Lockout: five failed sign-ins lock an email for 15 minutes and twenty lock
+  an address, without revealing which emails have accounts.
+- Server-side access control on every route through one module, `access.py`.
+  Employees see their own record, pay and time off; managers see their direct
+  and indirect reports without pay; HR sees everything. Records out of reach
+  answer 404.
+- Account management for HR: create accounts with a one-time temporary
+  password, change roles, reset passwords, turn accounts off. A
+  `create-admin` command for the first HR admin.
+- An append-only audit log of changes to people, pay, roles, accounts,
+  departments, time off, checklists, policies and exports, readable by HR.
+- A last working day on the employee record, and onboarding and offboarding
+  checklists. Marking someone as left turns off their account.
+- Policies with immutable text and per-person acknowledgements.
+- Leave balances by type with monthly accrual, in working days.
+- A headcount and attrition report with a CSV limited to the viewer's
+  reporting tree.
+- Versioned schema migrations with Alembic through Flask-Migrate, tested from
+  every earlier schema shape on SQLite and PostgreSQL.
+- `docs/security.md`: trust boundaries, access rules and 16 abuse cases, each
+  with a test.
+- Departments (add, rename, delete), reporting lines with an org chart,
+  employment status, compensation history, time-off requests, a people
+  dashboard and `seed-demo` demo data.
+- Security headers, a 64 KiB request limit and error pages in the app layout.
+- `scripts/check.sh`, `scripts/dev.sh`, `.claude/launch.json`, `llms.txt`,
+  CONTRIBUTING, CODEOWNERS, Dependabot, issue and PR templates.
+- A check that fails when a document quotes the wrong test count.
+
+### Changed
+
+- Time off is decided by the signed-in account. The form no longer names an
+  approver, and anyone above the requester in the reporting line, or HR, can
+  decide.
+- The directory shows salary, status and people who left to HR only. The
+  directory CSV is HR-only.
+- `seed-demo` also creates demo accounts at `@peoplebase.example` and prints
+  one random password for the run.
+- Every page served to a signed-in account is `Cache-Control: no-store`.
+- Models moved to `models.py`. The app no longer creates or patches tables at
+  startup: run `flask --app app db upgrade`.
+- README, architecture notes and the project page rewritten around the access
+  model, with diagrams and new screenshots.
 
 ### Fixed
 
