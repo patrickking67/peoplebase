@@ -21,7 +21,8 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import inspect, text
+from flask_migrate import Migrate
+from sqlalchemy import inspect
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 from models import (
@@ -65,14 +66,9 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
 MAX_TIME_OFF_DAYS = 60
-# Columns added to the original employee table. db.create_all() never alters an
-# existing table, so upgrade_schema() adds any that an older database lacks.
-EMPLOYEE_UPGRADE_COLUMNS = {
-    "department_id": "INTEGER REFERENCES department (id)",
-    "manager_id": "INTEGER REFERENCES employee (id)",
-    "status": "VARCHAR(20) NOT NULL DEFAULT 'active'",
-    "start_date": "DATE",
-}
+MIGRATIONS_DIRECTORY = Path(__file__).resolve().parent / "migrations"
+
+migrate = Migrate()
 
 
 def create_app(test_config=None):
@@ -100,6 +96,9 @@ def create_app(test_config=None):
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
+    # The schema is owned by the versioned migrations in migrations/versions.
+    # Nothing is created at startup: run "flask --app app db upgrade".
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIRECTORY), render_as_batch=True, compare_type=True)
     app.jinja_env.globals["csrf_token"] = get_csrf_token
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
     app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
@@ -434,6 +433,7 @@ def create_app(test_config=None):
     @app.cli.command("seed-demo")
     def seed_demo_command():
         """Load clearly fake demo data into an empty database."""
+        require_schema()
         if db.session.scalar(db.select(db.func.count(Employee.id))):
             raise click.ClickException(
                 "The database already has employees. seed-demo only fills an empty "
@@ -445,29 +445,19 @@ def create_app(test_config=None):
             f"departments and {summary['time_off']} time-off requests."
         )
 
-    with app.app_context():
-        db.create_all()
-        upgrade_schema()
-
     return app
 
 
-def upgrade_schema():
-    """Bring a database created by an older PeopleBase up to the current schema.
+def require_schema():
+    if not schema_ready():
+        raise click.ClickException(
+            "The database has no PeopleBase tables yet. Run: flask --app app db upgrade"
+        )
 
-    New tables come from db.create_all(). This adds the columns that later
-    versions put on the existing employee table. Every added column is nullable
-    or has a default, so existing rows stay valid.
-    """
-    existing = {column["name"] for column in inspect(db.engine).get_columns("employee")}
-    missing = [name for name in EMPLOYEE_UPGRADE_COLUMNS if name not in existing]
-    if not missing:
-        return
-    with db.engine.begin() as connection:
-        for name in missing:
-            connection.execute(
-                text(f"ALTER TABLE employee ADD COLUMN {name} {EMPLOYEE_UPGRADE_COLUMNS[name]}")
-            )
+
+def schema_ready():
+    """True once the migrations have run against the configured database."""
+    return inspect(db.engine).has_table("employee")
 
 
 def get_csrf_token():

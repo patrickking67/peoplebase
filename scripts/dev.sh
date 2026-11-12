@@ -9,4 +9,6 @@ if [ ! -x .venv/bin/flask ]; then
   exit 1
 fi
 export SECRET_KEY="${SECRET_KEY:-dev-only-not-secret}"
+# Create or update the tables. Safe to run every time.
+.venv/bin/flask --app app db upgrade
 exec .venv/bin/flask --app app run --port "${PORT:-4104}"

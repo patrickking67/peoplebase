@@ -16,6 +16,9 @@ def app(tmp_path):
     )
 
     with application.app_context():
+        # Tests build the schema straight from the models because it is fast.
+        # tests/test_migrations.py proves the migrations produce the same schema.
+        db.create_all()
         db.session.add(Employee(name="Avery Example", position="Engineer", salary=125000))
         db.session.commit()
 
