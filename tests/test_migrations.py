@@ -150,3 +150,38 @@ def test_downgrade_to_base_removes_every_table(migrated_app):
     downgrade(revision="base")
 
     assert table_names() <= {"alembic_version"}
+
+
+def test_rows_survive_the_employee_table_rebuild(migrated_app):
+    """Revision 0004 adds a column in batch mode, which on SQLite copies the
+    whole employee table. Nothing may be lost on the way."""
+    upgrade(revision="0003")
+    with db.engine.begin() as connection:
+        connection.execute(sa.text("INSERT INTO department (name) VALUES ('Finance')"))
+        connection.execute(
+            sa.text(
+                "INSERT INTO employee (name, position, salary, department_id, manager_id, status, start_date) VALUES "
+                "('Harper Example', 'Finance Manager', 134000, 1, NULL, 'active', '2020-03-02'), "
+                "('Rowan Example', 'Accountant', 86000.50, 1, 1, 'terminated', NULL)"
+            )
+        )
+
+    upgrade()
+
+    harper, rowan = db.session.scalars(db.select(Employee).order_by(Employee.id)).all()
+    assert (harper.name, harper.start_date, harper.status) == ("Harper Example", date(2020, 3, 2), "active")
+    assert (rowan.salary, rowan.manager_id, rowan.department.name) == (Decimal("86000.50"), 1, "Finance")
+    assert rowan.end_date is None and rowan.checklist_tasks == []
+    assert schema_differences() == []
+
+
+def test_every_revision_downgrades_and_upgrades_again(migrated_app):
+    upgrade()
+    revisions = [script.revision for script in ScriptDirectory(str(MIGRATIONS_DIRECTORY)).walk_revisions()]
+
+    for _ in revisions[:-1]:
+        downgrade()
+    assert table_names() == {"alembic_version", "department", "employee", "compensation_change", "time_off_request"}
+    upgrade()
+
+    assert schema_differences() == []

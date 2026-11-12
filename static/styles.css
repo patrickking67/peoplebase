@@ -631,3 +631,37 @@ div.org-node:hover { border-color: var(--line); }
 .audit-details del { color: var(--muted); }
 .audit-details ins { font-weight: 600; text-decoration: none; }
 .audit-details ins::before { content: "to "; color: var(--muted); font-weight: 400; }
+
+/* Checklists: a square that fills in, the way a paper list gets ticked. */
+
+.checklist { margin: 0; padding: 0; list-style: none; }
+.checklist li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 4px 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+}
+.checklist li:last-child { border-bottom: 0; padding-bottom: 0; }
+.checklist form { margin: 0; }
+.checklist small { color: var(--muted); font-size: 0.8125rem; }
+.task-mark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--line-strong);
+    border-radius: 4px;
+}
+.task-done .task-mark {
+    background: var(--success);
+    border-color: var(--success);
+    box-shadow: inset 0 0 0 3px var(--surface);
+}
+.task-done .task-title { color: var(--muted); }
+.checklist-compact { margin-top: 8px; }
+.checklist-compact li { grid-template-columns: auto minmax(0, 1fr) auto; padding: 6px 0; border: 0; }
+
+@media (max-width: 760px) {
+    .checklist li { grid-template-columns: auto minmax(0, 1fr); }
+    .checklist small, .checklist form { grid-column: 2; }
+}

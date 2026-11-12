@@ -27,6 +27,7 @@
             <div><dt>Employee ID</dt><dd>{{ employee.id }}</dd></div>
             {% if access.can_view_pay(employee) %}<div><dt>Annual salary</dt><dd class="num">${{ "{:,.2f}".format(employee.salary) }}</dd></div>{% endif %}
             <div><dt>Start date</dt><dd>{% if employee.start_date %}<time datetime="{{ employee.start_date.isoformat() }}">{{ employee.start_date.isoformat() }}</time>{% else %}Not recorded{% endif %}</dd></div>
+            {% if employee.end_date %}<div><dt>Last day</dt><dd><time datetime="{{ employee.end_date.isoformat() }}">{{ employee.end_date.isoformat() }}</time></dd></div>{% endif %}
             <div><dt>Manager</dt><dd>{% if employee.manager %}{{ person(employee.manager) }}{% else %}None{% endif %}</dd></div>
         </dl>
     </section>
@@ -43,6 +44,35 @@
         <p class="quiet">Nobody reports to {{ employee.name }}.</p>
         {% endif %}
     </section>
+
+    {% for kind, kind_label in CHECKLIST_KINDS.items() %}
+    {% set tasks = employee.checklist(kind) %}
+    {% if tasks %}
+    {% set done, total, progress = checklist_progress(tasks) %}
+    <section class="panel panel-wide" aria-labelledby="{{ kind }}-title">
+        <div class="panel-heading">
+            <h2 id="{{ kind }}-title">{{ kind_label }}</h2>
+            <span class="status status-{{ 'approved' if done == total else 'pending' }}">{{ progress }}: {{ done }} of {{ total }}</span>
+        </div>
+        <ul class="checklist">
+            {% for task in tasks %}
+            <li class="{{ 'task-done' if task.done else 'task-open' }}">
+                <span class="task-mark" aria-hidden="true"></span>
+                <span class="task-title">{{ task.title }}<span class="visually-hidden">: {{ "done" if task.done else "to do" }}</span></span>
+                {% if task.done %}<small>Done {{ task.completed_at.strftime('%Y-%m-%d') }}{% if access.can_update_checklist(employee) %} by {{ task.completed_by }}{% endif %}</small>{% endif %}
+                {% if access.can_update_checklist(employee) %}
+                <form method="post" action="{{ url_for('update_checklist_task', task_id=task.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="done" value="{{ '0' if task.done else '1' }}">
+                    <button class="link-button" type="submit">{{ "Reopen" if task.done else "Mark done" }}<span class="visually-hidden">: {{ task.title }}</span></button>
+                </form>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+    {% endfor %}
 
     {% if access.can_view_pay(employee) %}
     <section class="panel panel-wide" aria-labelledby="comp-title">

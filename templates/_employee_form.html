@@ -37,4 +37,6 @@
     </select>
     <label for="start_date">Start date</label>
     <input type="date" name="start_date" id="start_date" min="1900-01-01" max="2100-12-31" value="{{ values.get('start_date', current.start_date.isoformat() if current.start_date else '') }}">
+    <label for="end_date">Last day <span class="optional">(only when the status is Terminated; blank means today)</span></label>
+    <input type="date" name="end_date" id="end_date" min="1900-01-01" max="2100-12-31" value="{{ values.get('end_date', current.end_date.isoformat() if current.end_date else '') }}">
 </fieldset>

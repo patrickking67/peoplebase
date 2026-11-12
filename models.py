@@ -18,6 +18,24 @@ EMPLOYMENT_STATUSES = {
     "on_leave": "On leave",
     "terminated": "Terminated",
 }
+CHECKLIST_KINDS = {"onboarding": "Onboarding", "offboarding": "Offboarding"}
+# The standard tasks. A new hire gets the first list, someone leaving the second.
+CHECKLIST_TEMPLATES = {
+    "onboarding": [
+        "Signed contract on file",
+        "Payroll and tax details collected",
+        "Laptop and accounts ready",
+        "PeopleBase account created",
+        "First-week plan agreed with their manager",
+    ],
+    "offboarding": [
+        "Last working day confirmed in writing",
+        "Handover notes written",
+        "Laptop and badge returned",
+        "Accounts and access removed",
+        "Final pay and unused leave settled",
+    ],
+}
 TIME_OFF_KINDS = {"vacation": "Vacation", "sick": "Sick leave", "personal": "Personal"}
 TIME_OFF_STATUSES = {"pending": "Pending", "approved": "Approved", "denied": "Denied"}
 TIME_OFF_DECISIONS = {"approve": "approved", "deny": "denied"}
@@ -46,6 +64,8 @@ class Employee(db.Model):
     manager_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True)
     status = db.Column(db.String(20), nullable=False, default="active", server_default="active")
     start_date = db.Column(db.Date, nullable=True)
+    # Last working day. Set when the status becomes "terminated".
+    end_date = db.Column(db.Date, nullable=True)
 
     department = db.relationship("Department", back_populates="employees")
     manager = db.relationship("Employee", remote_side=[id], back_populates="reports")
@@ -65,9 +85,25 @@ class Employee(db.Model):
         order_by="TimeOffRequest.start_date.desc()",
     )
 
+    checklist_tasks = db.relationship(
+        "ChecklistTask",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+        order_by="(ChecklistTask.kind.desc(), ChecklistTask.position)",
+    )
+
     @property
     def status_label(self):
         return EMPLOYMENT_STATUSES.get(self.status, self.status)
+
+    def checklist(self, kind):
+        return [task for task in self.checklist_tasks if task.kind == kind]
+
+    def start_checklist(self, kind):
+        """Give the employee the standard tasks for kind, unless they have them."""
+        if not self.checklist(kind):
+            for position, title in enumerate(CHECKLIST_TEMPLATES[kind], start=1):
+                self.checklist_tasks.append(ChecklistTask(kind=kind, title=title, position=position))
 
     def __repr__(self):
         return f"<Employee {self.name}>"
@@ -85,6 +121,44 @@ class CompensationChange(db.Model):
     recorded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     employee = db.relationship("Employee", back_populates="compensation_history")
+
+
+class ChecklistTask(db.Model):
+    """One onboarding or offboarding task for one employee."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)
+    title = db.Column(db.String(120), nullable=False)
+    position = db.Column(db.Integer, nullable=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    # The email of whoever ticked it, kept as text so it survives account changes.
+    completed_by = db.Column(db.String(254), nullable=True)
+
+    employee = db.relationship("Employee", back_populates="checklist_tasks")
+
+    @property
+    def done(self):
+        return self.completed_at is not None
+
+    @property
+    def kind_label(self):
+        return CHECKLIST_KINDS.get(self.kind, self.kind)
+
+
+def checklist_progress(tasks):
+    """(done, total, label) for a list of tasks."""
+    total = len(tasks)
+    done = sum(1 for task in tasks if task.done)
+    if total == 0:
+        label = "Not started"
+    elif done == total:
+        label = "Complete"
+    elif done == 0:
+        label = "Not started"
+    else:
+        label = "In progress"
+    return done, total, label
 
 
 class TimeOffRequest(db.Model):
@@ -190,6 +264,8 @@ AUDIT_ACTIONS = {
     "time_off.requested": "Requested time off",
     "time_off.approved": "Approved time off",
     "time_off.denied": "Denied time off",
+    "checklist.completed": "Completed checklist task",
+    "checklist.reopened": "Reopened checklist task",
     "export.directory_csv": "Exported directory CSV",
 }
 AUDIT_GROUPS = {
@@ -199,6 +275,7 @@ AUDIT_GROUPS = {
     "compensation": "Pay",
     "department": "Departments",
     "time_off": "Time off",
+    "checklist": "Onboarding and offboarding",
     "export": "Exports",
 }
 

@@ -38,6 +38,7 @@ from access import Access
 from models import (
     AUDIT_ACTIONS,
     AUDIT_GROUPS,
+    CHECKLIST_KINDS,
     EMPLOYMENT_STATUSES,
     ROLES,
     TIME_OFF_DECISIONS,
@@ -45,11 +46,13 @@ from models import (
     TIME_OFF_STATUSES,
     Account,
     AuditEvent,
+    ChecklistTask,
     CompensationChange,
     Department,
     Employee,
     LoginThrottle,
     TimeOffRequest,
+    checklist_progress,
     db,
     utcnow,
 )
@@ -145,6 +148,8 @@ def create_app(test_config=None):
     app.extensions["password_decoy"] = hasher.hash(secrets.token_urlsafe(16))
     app.jinja_env.globals["csrf_token"] = get_csrf_token
     app.jinja_env.globals["ROLES"] = ROLES
+    app.jinja_env.globals["CHECKLIST_KINDS"] = CHECKLIST_KINDS
+    app.jinja_env.globals["checklist_progress"] = checklist_progress
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
     app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
     app.jinja_env.globals["TIME_OFF_STATUSES"] = TIME_OFF_STATUSES
@@ -493,6 +498,7 @@ def create_app(test_config=None):
                     reason="Hired",
                 )
             )
+            employee.start_checklist("offboarding" if employee.status == "terminated" else "onboarding")
             db.session.add(employee)
             audit("employee.created", employee, **employee_snapshot(employee))
             db.session.commit()
@@ -551,6 +557,11 @@ def create_app(test_config=None):
                 audit("employee.updated", employee, **changed)
             if employee.status == "terminated":
                 close_account(employee, unlink=False)
+                employee.start_checklist("offboarding")
+            elif before["status"] == "terminated":
+                # Back on staff: a later departure starts a fresh offboarding list.
+                for task in employee.checklist("offboarding"):
+                    employee.checklist_tasks.remove(task)
             db.session.commit()
             flash(f"Updated {employee.name}.", "success")
             return redirect(url_for("employee_profile", employee_id=employee.id))
@@ -702,6 +713,47 @@ def create_app(test_config=None):
             )
         return redirect(url_for("view_time_off"))
 
+    @app.get("/checklists")
+    def view_checklists():
+        """People with onboarding or offboarding still open, within reach."""
+        if not (g.access.is_admin or g.access.is_manager):
+            abort(403, description="This page is for managers and HR admins.")
+        statement = (
+            db.select(Employee)
+            .where(Employee.checklist_tasks.any(ChecklistTask.completed_at.is_(None)))
+            .order_by(Employee.name, Employee.id)
+        )
+        if not g.access.is_admin:
+            statement = statement.where(Employee.id.in_(g.access.reports))
+        rows = []
+        for employee in db.session.scalars(statement):
+            for kind in CHECKLIST_KINDS:
+                tasks = employee.checklist(kind)
+                if any(not task.done for task in tasks):
+                    rows.append({"employee": employee, "kind": kind, "tasks": tasks})
+        return render_template("checklists.html", rows=rows)
+
+    @app.post("/checklists/<int:task_id>")
+    def update_checklist_task(task_id):
+        task = db.get_or_404(ChecklistTask, task_id)
+        if not g.access.can_view_profile(task.employee):
+            abort(404)
+        if not g.access.can_update_checklist(task.employee):
+            abort(403, description="Only this person's managers or HR can update their checklist.")
+        done = request.form.get("done") == "1"
+        if done != task.done:
+            task.completed_at = utcnow() if done else None
+            task.completed_by = g.account.email if done else None
+            audit(
+                "checklist.completed" if done else "checklist.reopened",
+                task,
+                task=task.title,
+                checklist=task.kind,
+            )
+            db.session.commit()
+        back = safe_next(request.form.get("next"))
+        return redirect(back or url_for("employee_profile", employee_id=task.employee_id))
+
     @app.get("/audit")
     @admin_only
     def view_audit():
@@ -790,7 +842,13 @@ def schema_ready():
     return inspect(db.engine).has_table("employee")
 
 
-SUBJECT_TYPES = {Account: "account", Employee: "employee", Department: "department", TimeOffRequest: "time off"}
+SUBJECT_TYPES = {
+    Account: "account",
+    Employee: "employee",
+    Department: "department",
+    TimeOffRequest: "time off",
+    ChecklistTask: "checklist task",
+}
 
 
 def audit(action, subject=None, label=None, actor=None, **details):
@@ -830,7 +888,7 @@ def audit(action, subject=None, label=None, actor=None, **details):
 def describe_subject(subject):
     if isinstance(subject, Account):
         return subject.email
-    if isinstance(subject, TimeOffRequest):
+    if isinstance(subject, (TimeOffRequest, ChecklistTask)):
         return subject.employee.name
     return subject.name
 
@@ -845,6 +903,7 @@ def employee_snapshot(employee):
         "manager": employee.manager.name if employee.manager else None,
         "status": employee.status,
         "start_date": employee.start_date.isoformat() if employee.start_date else None,
+        "last_day": employee.end_date.isoformat() if employee.end_date else None,
     }
 
 
@@ -1215,6 +1274,9 @@ def validate_employment(form, employee=None):
     start_date, error = parse_date(form.get("start_date"), "Start date")
     if error:
         return None, error
+    end_date, error = parse_date(form.get("end_date"), "Last day")
+    if error:
+        return None, error
 
     department, error = parse_id(form.get("department_id"), Department, "department")
     if error:
@@ -1246,6 +1308,16 @@ def validate_employment(form, employee=None):
         for field, form_key in optional_fields:
             if form_key not in form:
                 values[field] = getattr(employee, field)
+
+    # A last day belongs only to someone who has left. It defaults to today, or
+    # to the day already on record when the form does not send one.
+    if status == "terminated":
+        recorded = employee.end_date if employee is not None and employee.status == "terminated" else None
+        values["end_date"] = end_date or recorded or date.today()
+        if values["start_date"] and values["end_date"] < values["start_date"]:
+            return None, "The last day cannot be before the start date."
+    else:
+        values["end_date"] = None
     return values, None
 
 
@@ -1499,6 +1571,15 @@ def seed_demo_data(today):
         )
         people[name] = employee
         db.session.add(employee)
+
+    # Skyler is the newest hire and still onboarding; Parker left and is mostly offboarded.
+    now = utcnow()
+    for name, kind, finished in (("Skyler Example", "onboarding", 3), ("Parker Example", "offboarding", 4)):
+        people[name].start_checklist(kind)
+        for task in people[name].checklist(kind)[:finished]:
+            task.completed_at = now
+            task.completed_by = demo_email(DEMO_ADMIN)
+    people["Parker Example"].end_date = today - timedelta(days=45)
 
     raise_on = anniversary_on(today, today.year - 1)
     jordan = people["Jordan Example"]

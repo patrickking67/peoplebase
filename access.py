@@ -81,6 +81,10 @@ class Access:
         own = {self.employee_id} if self.employee_id is not None else set()
         return frozenset(own | self.reports)
 
+    def can_update_checklist(self, employee):
+        """Tick onboarding and offboarding tasks: HR, or a manager for their reports."""
+        return self.is_admin or self.manages(employee)
+
     # Time off
 
     def can_request_time_off_for(self, employee):

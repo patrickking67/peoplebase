@@ -61,6 +61,8 @@ ROUTES = {
     "set_account_active": ("POST", "/accounts/1/active", 302, 403, 403, 302),
     "reset_account_password": ("POST", "/accounts/1/password", 302, 403, 403, 302),
     "view_audit": ("GET", "/audit", 302, 403, 403, 200),
+    "view_checklists": ("GET", "/checklists", 302, 403, 200, 200),
+    "update_checklist_task": ("POST", "/checklists/999", 302, 404, 404, 404),
 }
 
 
