@@ -60,6 +60,7 @@ ROUTES = {
     "change_account_role": ("POST", "/accounts/1/role", 302, 403, 403, 302),
     "set_account_active": ("POST", "/accounts/1/active", 302, 403, 403, 302),
     "reset_account_password": ("POST", "/accounts/1/password", 302, 403, 403, 302),
+    "view_audit": ("GET", "/audit", 302, 403, 403, 200),
 }
 
 

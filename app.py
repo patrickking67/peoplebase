@@ -1,5 +1,6 @@
 import csv
 import hmac
+import json
 import math
 import os
 import re
@@ -21,6 +22,7 @@ from flask import (
     current_app,
     flash,
     g,
+    has_request_context,
     make_response,
     redirect,
     render_template,
@@ -34,12 +36,15 @@ from werkzeug.exceptions import HTTPException, InternalServerError
 
 from access import Access
 from models import (
+    AUDIT_ACTIONS,
+    AUDIT_GROUPS,
     EMPLOYMENT_STATUSES,
     ROLES,
     TIME_OFF_DECISIONS,
     TIME_OFF_KINDS,
     TIME_OFF_STATUSES,
     Account,
+    AuditEvent,
     CompensationChange,
     Department,
     Employee,
@@ -51,6 +56,7 @@ from models import (
 
 MAX_SALARY = Decimal("999999999.99")
 DEFAULT_PER_PAGE = 25
+AUDIT_PER_PAGE = 50
 MAX_PER_PAGE = 100
 CSRF_SESSION_KEY = "_csrf_token"
 CSRF_FORM_FIELD = "csrf_token"
@@ -230,6 +236,8 @@ def create_app(test_config=None):
         if not password_matches(account, password) or not may_sign_in(account):
             for name, key in keys.items():
                 record_failed_login(key, LOGIN_LIMITS[name], now)
+            # The email is recorded as typed. The password never is.
+            audit("auth.sign_in_failed", label=email or "(no email)")
             db.session.commit()
             flash(LOGIN_FAILED_MESSAGE, "error")
             return render_template("login.html", next=next_url, email=email), 401
@@ -237,6 +245,7 @@ def create_app(test_config=None):
         clear_throttle(keys["email"])
         upgrade_password_hash(account, password)
         account.last_login_at = now
+        audit("auth.signed_in", account, actor=account)
         db.session.commit()
         start_session(account)
         return redirect(next_url or url_for("home"))
@@ -245,6 +254,7 @@ def create_app(test_config=None):
     def logout():
         # Rotating the nonce also ends this account's sessions in other browsers.
         g.account.end_sessions()
+        audit("auth.signed_out", g.account)
         db.session.commit()
         session.clear()
         flash("You are signed out.", "success")
@@ -263,6 +273,7 @@ def create_app(test_config=None):
             account.password_hash = hash_password(new_password)
             account.must_change_password = False
             account.end_sessions()
+            audit("auth.password_changed", account)
             db.session.commit()
             # Every other session is now signed out; keep this one.
             start_session(account)
@@ -285,6 +296,9 @@ def create_app(test_config=None):
         password = new_temporary_password()
         account = Account(**values, password_hash=hash_password(password), must_change_password=True)
         db.session.add(account)
+        audit(
+            "account.created", account, role=account.role, employee=account.employee.name if account.employee else None
+        )
         db.session.commit()
         flash(f"Created an account for {account.email}.", "success")
         return render_accounts({}, issued=(account, password)), 201
@@ -293,10 +307,13 @@ def create_app(test_config=None):
     @admin_only
     def change_account_role(account_id):
         account = db.get_or_404(Account, account_id)
+        old_role = account.role
         error = apply_role_change(account, request.form.get("role", "").strip(), g.account)
         if error:
             flash(error, "error")
         else:
+            if account.role != old_role:
+                audit("account.role_changed", account, role=[old_role, account.role])
             db.session.commit()
             flash(f"{account.email} is now {account.role_label}.", "success")
         return redirect(url_for("view_accounts"))
@@ -305,10 +322,13 @@ def create_app(test_config=None):
     @admin_only
     def set_account_active(account_id):
         account = db.get_or_404(Account, account_id)
+        was_active = account.active
         error = apply_active_change(account, request.form.get("active") == "1", g.account)
         if error:
             flash(error, "error")
         else:
+            if account.active != was_active:
+                audit("account.turned_on" if account.active else "account.turned_off", account)
             db.session.commit()
             flash(f"{account.email} {'can sign in again' if account.active else 'can no longer sign in'}.", "success")
         return redirect(url_for("view_accounts"))
@@ -325,6 +345,7 @@ def create_app(test_config=None):
         account.must_change_password = True
         account.end_sessions()
         clear_throttle(f"email:{account.email}")
+        audit("account.password_reset", account)
         db.session.commit()
         flash(f"Reset the password for {account.email}.", "success")
         return render_accounts({}, issued=(account, password))
@@ -443,6 +464,8 @@ def create_app(test_config=None):
                 ]
             )
 
+        audit("export.directory_csv", rows=len(employees), filters={k: v for k, v in criteria.items() if v})
+        db.session.commit()
         response = make_response(output.getvalue())
         response.headers["Content-Type"] = "text/csv; charset=utf-8"
         response.headers["Content-Disposition"] = "attachment; filename=peoplebase-employees.csv"
@@ -471,6 +494,7 @@ def create_app(test_config=None):
                 )
             )
             db.session.add(employee)
+            audit("employee.created", employee, **employee_snapshot(employee))
             db.session.commit()
             flash(f"Added {employee.name}.", "success")
             return redirect(url_for("employee_profile", employee_id=employee.id))
@@ -503,10 +527,28 @@ def create_app(test_config=None):
                     "update_employee.html", employee, request.form
                 ), 400
 
+            before = employee_snapshot(employee)
             for field, value in {**values, **details}.items():
                 setattr(employee, field, value)
             if change:
                 employee.compensation_history.append(change)
+                audit(
+                    "compensation.changed",
+                    employee,
+                    position=[before["position"], change.position],
+                    salary=[before["salary"], str(change.salary)],
+                    effective_date=change.effective_date,
+                    reason=change.reason,
+                )
+            after = employee_snapshot(employee)
+            # Pay and title have their own entry above; this one covers the rest.
+            changed = {
+                field: [before[field], after[field]]
+                for field in after
+                if before[field] != after[field] and field not in {"position", "salary"}
+            }
+            if changed:
+                audit("employee.updated", employee, **changed)
             if employee.status == "terminated":
                 close_account(employee, unlink=False)
             db.session.commit()
@@ -523,6 +565,7 @@ def create_app(test_config=None):
             flash("You cannot delete your own record. Ask another HR admin.", "error")
             return redirect(url_for("employee_profile", employee_id=employee.id))
         employee_name = employee.name
+        audit("employee.deleted", employee, **employee_snapshot(employee))
         close_account(employee, unlink=True)
         # SQLite does not enforce foreign keys by default, so clear references here.
         for report in employee.reports:
@@ -551,7 +594,9 @@ def create_app(test_config=None):
             return render_template(
                 "departments.html", departments=department_headcounts(), values=request.form
             ), 400
-        db.session.add(Department(name=name))
+        department = Department(name=name)
+        db.session.add(department)
+        audit("department.created", department)
         db.session.commit()
         flash(f"Added the {name} department.", "success")
         return redirect(url_for("view_departments"))
@@ -575,6 +620,7 @@ def create_app(test_config=None):
             return redirect(url_for("view_departments"))
         old_name = department.name
         department.name = name
+        audit("department.renamed", department, name=[old_name, name])
         db.session.commit()
         flash(f"Renamed {old_name} to {name}.", "success")
         return redirect(url_for("view_departments"))
@@ -591,6 +637,7 @@ def create_app(test_config=None):
                 "error",
             )
             return redirect(url_for("view_departments"))
+        audit("department.deleted", department)
         db.session.delete(department)
         db.session.commit()
         flash(f"Deleted the {department.name} department.", "success")
@@ -623,6 +670,7 @@ def create_app(test_config=None):
                 flash(error, "error")
                 return render_time_off_form(request.form), 400
             db.session.add(time_off)
+            audit("time_off.requested", time_off, **time_off_snapshot(time_off))
             db.session.commit()
             flash(
                 f"Requested {time_off.days} {'day' if time_off.days == 1 else 'days'} "
@@ -645,6 +693,7 @@ def create_app(test_config=None):
         if error:
             flash(error, "error")
         else:
+            audit(f"time_off.{time_off.status}", time_off, **time_off_snapshot(time_off))
             db.session.commit()
             flash(
                 f"{time_off.status_label} {time_off.employee.name}'s time off "
@@ -652,6 +701,34 @@ def create_app(test_config=None):
                 "success",
             )
         return redirect(url_for("view_time_off"))
+
+    @app.get("/audit")
+    @admin_only
+    def view_audit():
+        group = request.args.get("group", "").strip()
+        if group not in AUDIT_GROUPS:
+            group = ""
+        search = request.args.get("q", "").strip()[:100]
+        statement = db.select(AuditEvent).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        if group:
+            statement = statement.where(AuditEvent.action.startswith(f"{group}.", autoescape=True))
+        if search:
+            statement = statement.where(
+                db.or_(
+                    AuditEvent.actor_label.icontains(search, autoescape=True),
+                    AuditEvent.subject_label.icontains(search, autoescape=True),
+                )
+            )
+        page = min(max(request.args.get("page", 1, type=int), 1), 10_000)
+        pagination = db.paginate(statement, page=page, per_page=AUDIT_PER_PAGE, error_out=False)
+        return render_template(
+            "audit.html",
+            pagination=pagination,
+            groups=AUDIT_GROUPS,
+            selected_group=group,
+            search=search,
+            page_args={"group": group or None, "q": search or None},
+        )
 
     @app.cli.command("seed-demo")
     def seed_demo_command():
@@ -690,9 +767,11 @@ def create_app(test_config=None):
         error = password_problem(password, email)
         if error:
             raise click.ClickException(error)
-        db.session.add(
-            Account(email=email, role="admin", password_hash=hash_password(password), must_change_password=False)
+        account = Account(
+            email=email, role="admin", password_hash=hash_password(password), must_change_password=False
         )
+        db.session.add(account)
+        audit("account.created", account, role="admin", via="create-admin command")
         db.session.commit()
         click.echo(f"Created the HR admin account {email}.")
 
@@ -709,6 +788,68 @@ def require_schema():
 def schema_ready():
     """True once the migrations have run against the configured database."""
     return inspect(db.engine).has_table("employee")
+
+
+SUBJECT_TYPES = {Account: "account", Employee: "employee", Department: "department", TimeOffRequest: "time off"}
+
+
+def audit(action, subject=None, label=None, actor=None, **details):
+    """Add one entry to the audit log, in the same transaction as the change
+    it describes: the caller's commit saves both or neither.
+
+    actor defaults to the signed-in account. Outside a request (the CLI) or
+    before sign-in, the entry says so instead.
+    """
+    if action not in AUDIT_ACTIONS:
+        raise ValueError(f"Unknown audit action: {action}")
+    if actor is None and has_request_context():
+        actor = g.get("account")
+    if actor is not None:
+        actor_label = actor.email
+    else:
+        actor_label = "not signed in" if has_request_context() else "command line"
+    subject_id = None
+    if subject is not None:
+        if subject.id is None:
+            db.session.flush()
+        subject_id = subject.id
+        label = label or describe_subject(subject)
+    db.session.add(
+        AuditEvent(
+            actor_account_id=actor.id if actor is not None else None,
+            actor_label=actor_label,
+            action=action,
+            subject_type=SUBJECT_TYPES.get(type(subject), ""),
+            subject_id=subject_id,
+            subject_label=(label or "")[:254],
+            details=json.dumps({key: value for key, value in details.items() if value is not None}, default=str),
+        )
+    )
+
+
+def describe_subject(subject):
+    if isinstance(subject, Account):
+        return subject.email
+    if isinstance(subject, TimeOffRequest):
+        return subject.employee.name
+    return subject.name
+
+
+def employee_snapshot(employee):
+    """The audited fields of an employee as plain text, for before and after."""
+    return {
+        "name": employee.name,
+        "position": employee.position,
+        "salary": str(employee.salary),
+        "department": employee.department.name if employee.department else None,
+        "manager": employee.manager.name if employee.manager else None,
+        "status": employee.status,
+        "start_date": employee.start_date.isoformat() if employee.start_date else None,
+    }
+
+
+def time_off_snapshot(time_off):
+    return {"kind": time_off.kind, "first_day": time_off.start_date, "last_day": time_off.end_date}
 
 
 def admin_only(view):

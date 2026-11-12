@@ -21,6 +21,7 @@
         ('view_time_off', 'Time off', ['view_time_off', 'request_time_off'], true),
         ('view_departments', 'Departments', ['view_departments', 'add_department'], access.is_admin),
         ('view_accounts', 'Accounts', ['view_accounts', 'add_account'], access.is_admin),
+        ('view_audit', 'Audit log', ['view_audit'], access.is_admin),
     ] %}
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}" aria-label="PeopleBase dashboard">

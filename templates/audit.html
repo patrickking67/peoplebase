@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Audit log | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Audit log</h1><p class="lede">Who changed what, and when. Entries are written with the change they describe and cannot be edited or removed here. Times are UTC.</p></div>
+</section>
+<section class="panel directory-tools" aria-label="Filter the audit log">
+    <form class="filter-form filter-form-short" method="get" action="{{ url_for('view_audit') }}">
+        <div class="field field-search">
+            <label for="q">Person or record</label>
+            <input id="q" name="q" type="search" value="{{ search }}" maxlength="100" placeholder="Email or name">
+        </div>
+        <div class="field">
+            <label for="group">Kind of change</label>
+            <select id="group" name="group">
+                <option value="">Everything</option>
+                {% for key, label in groups.items() %}
+                <option value="{{ key }}"{% if key == selected_group %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-actions">
+            <button class="button" type="submit">Apply filters</button>
+            {% if search or selected_group %}<a href="{{ url_for('view_audit') }}">Clear</a>{% endif %}
+        </div>
+    </form>
+</section>
+{% if pagination.total %}
+<div class="table-wrap">
+    <table class="audit-table">
+        <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Record</th><th scope="col">Details</th></tr></thead>
+        <tbody>
+            {% for entry in pagination.items %}
+            <tr>
+                <td class="num"><time datetime="{{ entry.created_at.isoformat() }}Z">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</time></td>
+                <td>{{ entry.actor_label }}</td>
+                <td>{{ entry.action_label }}</td>
+                <td>{{ entry.subject_label or "None" }}{% if entry.subject_type %}<small>{{ entry.subject_type|capitalize }}{% if entry.subject_id %} {{ entry.subject_id }}{% endif %}</small>{% endif %}</td>
+                <td>
+                    {% if entry.detail_items %}
+                    <dl class="audit-details">
+                        {% for key, value in entry.detail_items %}
+                        <div><dt>{{ key|replace('_', ' ') }}</dt><dd>{% if value is sequence and value is not string and value|length == 2 %}<del>{{ value[0] if value[0] is not none else "none" }}</del> <ins>{{ value[1] if value[1] is not none else "none" }}</ins>{% elif value is mapping %}{% for name, item in value.items() %}{{ name }}: {{ item }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ value }}{% endif %}</dd></div>
+                        {% endfor %}
+                    </dl>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if pagination.pages > 1 %}
+    <nav class="pagination" aria-label="Audit log pages">
+        {% if pagination.has_prev %}<a href="{{ url_for('view_audit', page=pagination.prev_num, **page_args) }}" rel="prev">Newer entries</a>{% else %}<span aria-hidden="true">Newer entries</span>{% endif %}
+        <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        {% if pagination.has_next %}<a href="{{ url_for('view_audit', page=pagination.next_num, **page_args) }}" rel="next">Older entries</a>{% else %}<span aria-hidden="true">Older entries</span>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% else %}
+<section class="empty-state"><h2>No entries match.</h2><p>Nothing in the log fits these filters.</p><a class="button" href="{{ url_for('view_audit') }}">Clear filters</a></section>
+{% endif %}
+{% endblock %}

@@ -4,10 +4,12 @@ Kept apart from app.py so the policy and reporting modules can use the models
 without importing the Flask routes.
 """
 
+import json
 import secrets
 from datetime import UTC, datetime
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import event
 
 db = SQLAlchemy()
 
@@ -165,3 +167,86 @@ class LoginThrottle(db.Model):
     failures = db.Column(db.Integer, nullable=False, default=0)
     window_started_at = db.Column(db.DateTime, nullable=False)
     locked_until = db.Column(db.DateTime, nullable=True)
+
+
+# Every action the audit log can hold, with the wording HR sees.
+AUDIT_ACTIONS = {
+    "auth.signed_in": "Signed in",
+    "auth.sign_in_failed": "Failed sign-in",
+    "auth.signed_out": "Signed out",
+    "auth.password_changed": "Changed own password",
+    "account.created": "Created account",
+    "account.role_changed": "Changed role",
+    "account.turned_off": "Turned account off",
+    "account.turned_on": "Turned account on",
+    "account.password_reset": "Reset password",
+    "employee.created": "Added employee",
+    "employee.updated": "Changed employee record",
+    "employee.deleted": "Deleted employee",
+    "compensation.changed": "Changed pay or title",
+    "department.created": "Added department",
+    "department.renamed": "Renamed department",
+    "department.deleted": "Deleted department",
+    "time_off.requested": "Requested time off",
+    "time_off.approved": "Approved time off",
+    "time_off.denied": "Denied time off",
+    "export.directory_csv": "Exported directory CSV",
+}
+AUDIT_GROUPS = {
+    "auth": "Sign-in",
+    "account": "Accounts and roles",
+    "employee": "Employee records",
+    "compensation": "Pay",
+    "department": "Departments",
+    "time_off": "Time off",
+    "export": "Exports",
+}
+
+
+class AuditLogError(RuntimeError):
+    """Raised when code tries to change or remove an audit entry."""
+
+
+class AuditEvent(db.Model):
+    """One line of the audit log: who did what to whom, and when.
+
+    Rows are only ever inserted. Names are copied in as text and ids are plain
+    integers rather than foreign keys, so an entry still reads correctly after
+    the person or record it mentions is renamed or deleted.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+    actor_account_id = db.Column(db.Integer, nullable=True)
+    actor_label = db.Column(db.String(254), nullable=False)
+    action = db.Column(db.String(40), nullable=False, index=True)
+    subject_type = db.Column(db.String(30), nullable=False, default="")
+    subject_id = db.Column(db.Integer, nullable=True)
+    subject_label = db.Column(db.String(254), nullable=False, default="")
+    # JSON object of the specifics, for example {"salary": ["128000.00", "134000.00"]}.
+    details = db.Column(db.Text, nullable=False, default="{}")
+
+    @property
+    def action_label(self):
+        return AUDIT_ACTIONS.get(self.action, self.action)
+
+    @property
+    def detail_items(self):
+        return sorted(json.loads(self.details).items())
+
+
+@event.listens_for(AuditEvent, "before_update")
+@event.listens_for(AuditEvent, "before_delete")
+def refuse_audit_change(mapper, connection, target):
+    raise AuditLogError("Audit entries cannot be changed or deleted.")
+
+
+@event.listens_for(db.session, "do_orm_execute")
+def refuse_bulk_audit_change(state):
+    """Catch UPDATE and DELETE statements that skip the per-row hooks above."""
+    if not (state.is_update or state.is_delete):
+        return
+    # ORM statements carry an annotated copy of the table, so compare by name.
+    table = getattr(state.statement, "table", None)
+    if getattr(table, "name", None) == AuditEvent.__tablename__:
+        raise AuditLogError("Audit entries cannot be changed or deleted.")
