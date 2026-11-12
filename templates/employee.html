@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ employee.name }} | PeopleBase{% endblock %}
+{# Link a name only when the viewer may open that profile. #}
+{% macro person(someone) %}{% if access.can_view_profile(someone) %}<a href="{{ url_for('employee_profile', employee_id=someone.id) }}">{{ someone.name }}</a>{% else %}{{ someone.name }}{% endif %}{% endmacro %}
 {% block content %}
 <section class="page-heading profile-heading">
     <div>
@@ -7,6 +9,7 @@
         <p class="lede">{{ employee.position }}{% if employee.department %} in <a href="{{ url_for('view_employees', department=employee.department_id) }}">{{ employee.department.name }}</a>{% endif %}</p>
         <p><span class="status status-{{ employee.status }}">{{ employee.status_label }}</span></p>
     </div>
+    {% if access.can_manage_people() %}
     <div class="heading-actions">
         <a class="button" href="{{ url_for('update_employee', employee_id=employee.id) }}">Edit record</a>
         <form method="post" action="{{ url_for('delete_employee', employee_id=employee.id) }}" data-confirm="Delete {{ employee.name }}? This cannot be undone.">
@@ -14,6 +17,7 @@
             <button class="button button-quiet button-danger" type="submit">Delete</button>
         </form>
     </div>
+    {% endif %}
 </section>
 
 <div class="profile-grid">
@@ -21,9 +25,10 @@
         <h2 id="facts-title">Employment</h2>
         <dl class="facts">
             <div><dt>Employee ID</dt><dd>{{ employee.id }}</dd></div>
-            <div><dt>Annual salary</dt><dd class="num">${{ "{:,.2f}".format(employee.salary) }}</dd></div>
+            {% if access.can_view_pay(employee) %}<div><dt>Annual salary</dt><dd class="num">${{ "{:,.2f}".format(employee.salary) }}</dd></div>{% endif %}
             <div><dt>Start date</dt><dd>{% if employee.start_date %}<time datetime="{{ employee.start_date.isoformat() }}">{{ employee.start_date.isoformat() }}</time>{% else %}Not recorded{% endif %}</dd></div>
-            <div><dt>Manager</dt><dd>{% if employee.manager %}<a href="{{ url_for('employee_profile', employee_id=employee.manager.id) }}">{{ employee.manager.name }}</a>{% else %}None{% endif %}</dd></div>
+            {% if employee.end_date %}<div><dt>Last day</dt><dd><time datetime="{{ employee.end_date.isoformat() }}">{{ employee.end_date.isoformat() }}</time></dd></div>{% endif %}
+            <div><dt>Manager</dt><dd>{% if employee.manager %}{{ person(employee.manager) }}{% else %}None{% endif %}</dd></div>
         </dl>
     </section>
 
@@ -32,7 +37,7 @@
         {% if employee.reports %}
         <ul class="plain-list">
             {% for report in employee.reports %}
-            <li><a href="{{ url_for('employee_profile', employee_id=report.id) }}">{{ report.name }}</a><span>{{ report.position }}</span></li>
+            <li>{{ person(report) }}<span>{{ report.position }}</span></li>
             {% endfor %}
         </ul>
         {% else %}
@@ -40,6 +45,36 @@
         {% endif %}
     </section>
 
+    {% for kind, kind_label in CHECKLIST_KINDS.items() %}
+    {% set tasks = employee.checklist(kind) %}
+    {% if tasks %}
+    {% set done, total, progress = checklist_progress(tasks) %}
+    <section class="panel panel-wide" aria-labelledby="{{ kind }}-title">
+        <div class="panel-heading">
+            <h2 id="{{ kind }}-title">{{ kind_label }}</h2>
+            <span class="status status-{{ 'approved' if done == total else 'pending' }}">{{ progress }}: {{ done }} of {{ total }}</span>
+        </div>
+        <ul class="checklist">
+            {% for task in tasks %}
+            <li class="{{ 'task-done' if task.done else 'task-open' }}">
+                <span class="task-mark" aria-hidden="true"></span>
+                <span class="task-title">{{ task.title }}<span class="visually-hidden">: {{ "done" if task.done else "to do" }}</span></span>
+                {% if task.done %}<small>Done {{ task.completed_at.strftime('%Y-%m-%d') }}{% if access.can_update_checklist(employee) %} by {{ task.completed_by }}{% endif %}</small>{% endif %}
+                {% if access.can_update_checklist(employee) %}
+                <form method="post" action="{{ url_for('update_checklist_task', task_id=task.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="done" value="{{ '0' if task.done else '1' }}">
+                    <button class="link-button" type="submit">{{ "Reopen" if task.done else "Mark done" }}<span class="visually-hidden">: {{ task.title }}</span></button>
+                </form>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+    {% endfor %}
+
+    {% if access.can_view_pay(employee) %}
     <section class="panel panel-wide" aria-labelledby="comp-title">
         <h2 id="comp-title">Compensation history</h2>
         {% if employee.compensation_history %}
@@ -62,11 +97,19 @@
         <p class="quiet">No changes recorded yet. The next title or salary change starts the history.</p>
         {% endif %}
     </section>
+    {% endif %}
+
+    {% if employee.status != 'terminated' %}
+    <section class="panel panel-wide" aria-labelledby="balances-title">
+        <h2 id="balances-title">Leave balances, {{ today.year }}</h2>
+        {% with person = employee %}{% include '_leave_balances.html' %}{% endwith %}
+    </section>
+    {% endif %}
 
     <section class="panel panel-wide" aria-labelledby="time-off-title">
         <div class="panel-heading">
             <h2 id="time-off-title">Time off</h2>
-            {% if employee.status != 'terminated' %}<a href="{{ url_for('request_time_off', employee=employee.id) }}">Request time off</a>{% endif %}
+            {% if employee.status != 'terminated' and access.can_request_time_off_for(employee) %}<a href="{{ url_for('request_time_off', employee=employee.id) }}">Request time off</a>{% endif %}
         </div>
         {% if employee.time_off_requests %}
         <ul class="plain-list">

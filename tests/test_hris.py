@@ -1,12 +1,11 @@
 import csv
 import io
-import sqlite3
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from app import CompensationChange, Department, Employee, create_app, db
+from app import CompensationChange, Department, Employee, db
 
 
 @pytest.fixture()
@@ -462,37 +461,6 @@ def test_directory_export_link_keeps_new_filters(client, org):
     response = client.get(f"/employees?department={org['design']}&status=active")
 
     assert f"/employees.csv?department={org['design']}&amp;status=active".encode() in response.data
-
-
-# Schema upgrade
-
-
-def test_database_from_an_older_version_is_upgraded(tmp_path):
-    path = tmp_path / "old.db"
-    connection = sqlite3.connect(path)
-    connection.execute(
-        "CREATE TABLE employee (id INTEGER PRIMARY KEY, name VARCHAR(100) NOT NULL, "
-        "position VARCHAR(100) NOT NULL, salary NUMERIC(12, 2) NOT NULL)"
-    )
-    connection.execute("INSERT INTO employee (name, position, salary) VALUES ('Legacy Example', 'Clerk', 50000)")
-    connection.commit()
-    connection.close()
-
-    application = create_app({"TESTING": True, "SECRET_KEY": "test", "SQLALCHEMY_DATABASE_URI": f"sqlite:///{path}"})
-
-    with application.app_context():
-        legacy = db.session.get(Employee, 1)
-        assert legacy.name == "Legacy Example"
-        assert legacy.status == "active"
-        assert legacy.department is None
-        db.engine.dispose()
-    response = application.test_client().get("/employees/1")
-    assert response.status_code == 200
-    # Running the factory again on an up-to-date database changes nothing.
-    again = create_app({"TESTING": True, "SECRET_KEY": "test", "SQLALCHEMY_DATABASE_URI": f"sqlite:///{path}"})
-    with again.app_context():
-        assert db.session.get(Employee, 1).name == "Legacy Example"
-        db.engine.dispose()
 
 
 def test_edit_keeps_fields_the_form_leaves_out(client, app, csrf_token, org):

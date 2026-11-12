@@ -1,24 +1,29 @@
 # PeopleBase
 
-> PeopleBase is a small open source HR system built with Flask and SQLAlchemy. It keeps employee records, departments, reporting lines, compensation history with effective dates, and time-off requests with a manager approval rule, and shows a people dashboard and an org chart. All server code is in one module (app.py) with server-rendered Jinja templates, CSRF protection, a strict Content-Security-Policy, spreadsheet-safe CSV export and a pytest suite. It has no login and is meant for demo data on a private network.
+> PeopleBase is a small open source HRIS (human resources information system) built with Flask and SQLAlchemy. Employees, managers and HR admins sign in and see only what their role and reporting line allow: employees their own record, pay and time off; managers their direct and indirect reports without pay; HR everything. It covers people records, compensation history, time off with approval and leave balances, onboarding and offboarding checklists, policy acknowledgements, a headcount and attrition report and an append-only audit log. Passwords use Argon2id, the schema is managed by Alembic migrations, and the suite has 525 tests. It is a portfolio project, not a hosted product.
 
 ## Docs
 
-- [README](https://github.com/patrickking67/peoplebase/blob/main/README.md): features, quickstart, configuration, approval rules and tests
-- [Architecture](https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md): models, request handling, validation and schema upgrades
+- [README](https://github.com/patrickking67/peoplebase/blob/main/README.md): overview, quickstart, diagrams, quality signals and configuration
+- [Security model](https://github.com/patrickking67/peoplebase/blob/main/docs/security.md): trust boundaries, roles, access rules, 16 abuse cases and known limits
+- [Architecture](https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md): components, data model, permission flow, audit log and migrations
 - [Agent guide](https://github.com/patrickking67/peoplebase/blob/main/AGENTS.md): layout, exact commands, conventions and definition of done
-- [Security policy](https://github.com/patrickking67/peoplebase/blob/main/SECURITY.md): reporting, scope and deployment notes
+- [Security policy](https://github.com/patrickking67/peoplebase/blob/main/SECURITY.md): private reporting, scope and deployment notes
 - [Changelog](https://github.com/patrickking67/peoplebase/blob/main/CHANGELOG.md): what changed and when
 
 ## Source
 
 - [Repository](https://github.com/patrickking67/peoplebase): MIT licensed
-- [app.py](https://github.com/patrickking67/peoplebase/blob/main/app.py): factory, models, routes, validation and the seed-demo command
-- [Tests](https://github.com/patrickking67/peoplebase/tree/main/tests): pytest suite
+- [access.py](https://github.com/patrickking67/peoplebase/blob/main/access.py): the permission model in one class
+- [app.py](https://github.com/patrickking67/peoplebase/blob/main/app.py): factory, request gates, routes, validation and CLI commands
+- [models.py](https://github.com/patrickking67/peoplebase/blob/main/models.py): models and the append-only audit guard
+- [leave.py](https://github.com/patrickking67/peoplebase/blob/main/leave.py): leave accrual and balances
+- [reports.py](https://github.com/patrickking67/peoplebase/blob/main/reports.py): headcount and attrition
+- [Tests](https://github.com/patrickking67/peoplebase/tree/main/tests): pytest suite, including the route-by-role access table
 
-## Live demo
+## Project page
 
-- [Landing page](https://patrickking67.github.io/peoplebase/): overview, screenshot and quickstart
+- [Project page](https://patrickking67.github.io/peoplebase/): screenshots, the security model and quickstart
 
 ## Optional
 

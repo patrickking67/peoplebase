@@ -15,11 +15,16 @@
 <body>
     <a class="skip-link" href="#main">Skip to content</a>
     {% set nav_items = [
-        ('home', 'Dashboard', ['home']),
-        ('view_employees', 'Directory', ['view_employees', 'employee_profile', 'update_employee', 'add_employee']),
-        ('org_chart', 'Org chart', ['org_chart']),
-        ('view_departments', 'Departments', ['view_departments', 'add_department']),
-        ('view_time_off', 'Time off', ['view_time_off', 'request_time_off']),
+        ('home', 'Dashboard', ['home'], true),
+        ('view_employees', 'Directory', ['view_employees', 'employee_profile', 'update_employee', 'add_employee'], true),
+        ('org_chart', 'Org chart', ['org_chart'], true),
+        ('view_time_off', 'Time off', ['view_time_off', 'request_time_off'], true),
+        ('view_policies', 'Policies', ['view_policies', 'view_policy', 'add_policy', 'revise_policy'], true),
+        ('view_checklists', 'Onboarding', ['view_checklists'], access.is_admin or access.is_manager),
+        ('view_headcount_report', 'Reports', ['view_headcount_report'], access.can_view_reports()),
+        ('view_departments', 'Departments', ['view_departments', 'add_department'], access.is_admin),
+        ('view_accounts', 'Accounts', ['view_accounts', 'add_account'], access.is_admin),
+        ('view_audit', 'Audit log', ['view_audit'], access.is_admin),
     ] %}
     <header class="site-header">
         <a class="brand" href="{{ url_for('home') }}" aria-label="PeopleBase dashboard">
@@ -32,11 +37,26 @@
             </svg>
             <span class="brand-word">People<span>Base</span></span>
         </a>
+        {% if current_account and not current_account.must_change_password %}
         <nav class="site-nav" aria-label="Primary">
-            {% for endpoint, label, active in nav_items %}
-            <a href="{{ url_for(endpoint) }}"{% if request.endpoint in active %} aria-current="page"{% endif %}>{{ label }}</a>
+            {% for endpoint, label, active, shown in nav_items %}
+            {% if shown %}<a href="{{ url_for(endpoint) }}"{% if request.endpoint in active %} aria-current="page"{% endif %}>{{ label }}</a>{% endif %}
             {% endfor %}
         </nav>
+        {% endif %}
+        {% if current_account %}
+        <div class="account-menu">
+            <p class="account-who">
+                {% if current_account.employee %}<a href="{{ url_for('employee_profile', employee_id=current_account.employee_id) }}">{{ current_account.display_name }}</a>{% else %}<span>{{ current_account.display_name }}</span>{% endif %}
+                <span class="role role-{{ current_account.role }}">{{ current_account.role_label }}</span>
+            </p>
+            <a href="{{ url_for('change_password') }}"{% if request.endpoint == 'change_password' %} aria-current="page"{% endif %}>Password</a>
+            <form method="post" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="link-button" type="submit">Sign out</button>
+            </form>
+        </div>
+        {% endif %}
     </header>
     <main id="main" tabindex="-1">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -51,7 +71,7 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="site-footer">
-        <p>PeopleBase has no sign-in. Keep it on a private network and use demo data only.</p>
+        <p>{% if current_account %}Signed in as {{ current_account.email }}. Pay and leave data: close the tab on shared computers.{% else %}PeopleBase: people records, pay history and time off.{% endif %}</p>
         <p><a href="https://github.com/patrickking67/peoplebase">Source on GitHub</a></p>
     </footer>
 </body>

@@ -2,8 +2,8 @@
 {% block title %}Directory | PeopleBase{% endblock %}
 {% block content %}
 <section class="page-heading">
-    <div><h1>Directory</h1><p class="lede">Find people by name, title, team or status, and export exactly what you see.</p></div>
-    <div class="heading-actions"><a class="button" href="{{ url_for('add_employee') }}">Add employee</a></div>
+    <div><h1>Directory</h1><p class="lede">{% if access.is_admin %}Find people by name, title, team or status, and export exactly what you see.{% else %}Find the people you work with by name, title or team.{% endif %}</p></div>
+    {% if access.can_manage_people() %}<div class="heading-actions"><a class="button" href="{{ url_for('add_employee') }}">Add employee</a></div>{% endif %}
 </section>
 <section class="panel directory-tools" aria-label="Search and filters">
     <form class="filter-form" method="get" action="{{ url_for('view_employees') }}">
@@ -29,6 +29,7 @@
                 {% endfor %}
             </select>
         </div>
+        {% if access.is_admin %}
         <div class="field">
             <label for="status">Status</label>
             <select id="status" name="status">
@@ -38,28 +39,34 @@
                 {% endfor %}
             </select>
         </div>
+        {% endif %}
         <div class="filter-actions">
             <button class="button" type="submit">Apply filters</button>
             {% if filtered %}<a href="{{ url_for('view_employees') }}">Clear</a>{% endif %}
         </div>
     </form>
+    {% if access.is_admin %}
     <div class="summary-grid">
         <p><strong>{{ matching_count }}</strong><span>Matching records</span></p>
         <p><strong>${{ "{:,.0f}".format(total_payroll) }}</strong><span>Annual payroll</span></p>
         <p><strong>${{ "{:,.0f}".format(average_salary) }}</strong><span>Average salary</span></p>
     </div>
     <p class="export"><a href="{{ url_for('export_employees', **filter_args) }}">Download these {{ matching_count }} records as CSV</a></p>
+    {% else %}
+    <p class="export quiet">{{ matching_count }} {{ "person" if matching_count == 1 else "people" }}.</p>
+    {% endif %}
 </section>
 {% if pagination.total %}
 <div class="table-wrap">
     <table>
-        <thead><tr><th scope="col">Name</th><th scope="col">Job title</th><th scope="col">Department</th><th scope="col">Status</th><th scope="col" class="num">Annual salary</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <thead><tr><th scope="col">Name</th><th scope="col">Job title</th><th scope="col">Department</th>{% if access.is_admin %}<th scope="col">Status</th><th scope="col" class="num">Annual salary</th><th scope="col"><span class="visually-hidden">Actions</span></th>{% else %}<th scope="col">Manager</th>{% endif %}</tr></thead>
         <tbody>
             {% for employee in employees %}
             <tr>
-                <td><a class="person-link" href="{{ url_for('employee_profile', employee_id=employee.id) }}">{{ employee.name }}</a><small>ID {{ employee.id }}</small></td>
+                <td>{% if access.can_view_profile(employee) %}<a class="person-link" href="{{ url_for('employee_profile', employee_id=employee.id) }}">{{ employee.name }}</a>{% else %}<span class="person-link">{{ employee.name }}</span>{% endif %}{% if access.is_admin %}<small>ID {{ employee.id }}</small>{% endif %}</td>
                 <td>{{ employee.position }}</td>
                 <td>{{ employee.department.name if employee.department else "None" }}</td>
+                {% if access.is_admin %}
                 <td><span class="status status-{{ employee.status }}">{{ employee.status_label }}</span></td>
                 <td class="num">${{ "{:,.2f}".format(employee.salary) }}</td>
                 <td class="row-actions">
@@ -69,6 +76,9 @@
                         <button class="link-button link-danger" type="submit">Delete</button>
                     </form>
                 </td>
+                {% else %}
+                <td>{{ employee.manager.name if employee.manager and employee.manager.status != 'terminated' else "None" }}</td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -82,6 +92,6 @@
     {% endif %}
 </div>
 {% else %}
-<section class="empty-state"><h2>No records found.</h2><p>Nobody matches these filters. Clear them to see everyone, or add a new employee.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
+<section class="empty-state"><h2>No records found.</h2><p>Nobody matches these filters. Clear them to see everyone.</p><a class="button" href="{{ url_for('view_employees') }}">Clear filters</a></section>
 {% endif %}
 {% endblock %}

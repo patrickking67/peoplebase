@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard | PeopleBase{% endblock %}
+{% macro span(item) %}{{ item.kind_label }}, <time datetime="{{ item.start_date.isoformat() }}">{{ item.start_date.isoformat() }}</time>{% if item.days > 1 %} to <time datetime="{{ item.end_date.isoformat() }}">{{ item.end_date.isoformat() }}</time>{% endif %}{% endmacro %}
+{% block content %}
+<section class="page-heading dashboard-heading">
+    <div>
+        {% if waiting %}
+        <h1 class="headline">{{ waiting|length }} time-off {{ "request is" if waiting|length == 1 else "requests are" }} waiting on you.</h1>
+        {% elif employee %}
+        <h1 class="headline">Hello, {{ employee.name.split()[0] }}.</h1>
+        {% else %}
+        <h1 class="headline">Your account has no employee record yet.</h1>
+        {% endif %}
+        <p class="lede">
+            {% if employee %}{{ employee.position }}{% if employee.department %} in {{ employee.department.name }}{% endif %}.{% if report_count %} {{ report_count }} {{ "person reports" if report_count == 1 else "people report" }} up to you.{% endif %}
+            {% else %}Ask an HR admin to link it. Until then you can browse the directory and org chart.{% endif %}
+        </p>
+    </div>
+    {% if employee %}
+    <div class="heading-actions">
+        <a class="button" href="{{ url_for('request_time_off') }}">Request time off</a>
+        <a class="button button-quiet" href="{{ url_for('employee_profile', employee_id=employee.id) }}">Your record</a>
+    </div>
+    {% endif %}
+</section>
+
+<div class="dashboard-grid">
+    {% if access.is_manager %}
+    <section class="panel panel-wide" aria-labelledby="waiting-title">
+        <div class="panel-heading"><h2 id="waiting-title">Waiting for your decision</h2><a href="{{ url_for('view_time_off', status='pending') }}">Open the queue</a></div>
+        {% if waiting %}
+        <ul class="plain-list">
+            {% for item in waiting %}
+            <li><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a><span>{{ span(item) }} ({{ item.days }} {{ "day" if item.days == 1 else "days" }})</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Nothing is waiting. Requests from your reports show up here.</p>
+        {% endif %}
+    </section>
+    <section class="panel" aria-labelledby="team-out-title">
+        <h2 id="team-out-title">Your team, out today</h2>
+        {% if team_out %}
+        <ul class="plain-list">
+            {% for item in team_out %}
+            <li><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a><span>{{ item.kind_label }}, back after {{ item.end_date.isoformat() }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Everyone on your team is in today.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+    {% if employee %}
+    <section class="panel panel-wide" aria-labelledby="balances-title">
+        <h2 id="balances-title">Your leave, {{ today.year }}</h2>
+        {% with person = employee %}{% include '_leave_balances.html' %}{% endwith %}
+    </section>
+    {% endif %}
+    {% if employee %}
+    <section class="panel" aria-labelledby="own-title">
+        <div class="panel-heading"><h2 id="own-title">Your time off</h2><a href="{{ url_for('view_time_off') }}">See all</a></div>
+        {% if own_requests %}
+        <ul class="plain-list">
+            {% for item in own_requests %}
+            <li><span>{{ span(item) }}</span><span class="status status-{{ item.status }}">{{ item.status_label }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="quiet">Nothing booked or waiting. <a href="{{ url_for('request_time_off') }}">Request time off</a>.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+    {% if policies %}
+    <section class="panel" aria-labelledby="policies-title">
+        <div class="panel-heading"><h2 id="policies-title">Policies waiting for you</h2><a href="{{ url_for('view_policies') }}">All policies</a></div>
+        <ul class="plain-list">
+            {% for policy in policies %}
+            <li><a href="{{ url_for('view_policy', policy_id=policy.id) }}">{{ policy.title }}</a><span class="status status-pending">Needs your acknowledgement</span></li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

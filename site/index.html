@@ -3,20 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PeopleBase: a small HR system you can read in one sitting</title>
-<meta name="description" content="PeopleBase is an open source Flask and SQLAlchemy HR system: employee records, departments, reporting lines, compensation history, time off with manager approval, and a people dashboard.">
+<title>PeopleBase: a small HRIS with real access control</title>
+<meta name="description" content="PeopleBase is an open source Flask HRIS: sign-in with three roles, access enforced on every route, pay history, time off with leave balances, onboarding checklists, policy sign-off and an append-only audit log.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#2546f0">
 <link rel="canonical" href="https://patrickking67.github.io/peoplebase/">
 <meta property="og:title" content="PeopleBase">
-<meta property="og:description" content="A small HR system you can read in one sitting: records, reporting lines, pay history and time off, in Flask and SQLAlchemy.">
+<meta property="og:description" content="People data, and who gets to see it. A small Flask HRIS with three roles, one policy module and a test for every way around it.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://patrickking67.github.io/peoplebase/">
 <meta property="og:image" content="https://patrickking67.github.io/peoplebase/social-preview.png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="The PeopleBase logo next to a small org chart and the line: a small HR system you can read in one sitting.">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The PeopleBase logo and the line: people data, and who gets to see it, next to the PeopleBase dashboard.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PeopleBase">
+<meta name="twitter:description" content="People data, and who gets to see it. A small Flask HRIS with three roles, one policy module and a test for every way around it.">
+<meta name="twitter:image" content="https://patrickking67.github.io/peoplebase/social-preview.png">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -56,7 +59,7 @@
   .top nav { display: flex; gap: 20px; font-size: .9375rem; }
 
   .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 48px; padding-bottom: 64px; }
-  .hero h1 { max-width: 13ch; font-size: clamp(2.5rem, 1.4rem + 4.6vw, 4.75rem); letter-spacing: -.035em; line-height: 1.02; }
+  .hero h1 { max-width: 12ch; font-size: clamp(2.5rem, 1.4rem + 4.6vw, 4.75rem); letter-spacing: -.035em; line-height: 1.02; }
   .lede { max-width: 56ch; margin-top: 22px; color: var(--muted); font-size: clamp(1.125rem, 1rem + .5vw, 1.3rem); line-height: 1.5; }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
   .button { display: inline-flex; align-items: center; min-height: 46px; padding: 10px 20px; color: var(--brand-ink); background: var(--brand); border: 1px solid var(--brand); border-radius: 8px; font-weight: 600; font-size: .9375rem; text-decoration: none; }
@@ -65,7 +68,7 @@
   .button-quiet:hover { filter: none; background: var(--paper); }
 
   .shot { margin: 0; }
-  .shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line-strong); border-radius: 14px; background: #0e1124; }
+  .shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); }
   .shot figcaption { margin-top: 12px; color: var(--muted); font-size: .9375rem; }
 
   section { padding: 64px 0; border-top: 1px solid var(--line); }
@@ -97,16 +100,48 @@
   table { width: 100%; border-collapse: collapse; font-size: 1rem; }
   th, td { padding: 12px 16px 12px 0; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-size: .875rem; font-weight: 600; }
-  .note { margin-top: 28px; padding: 16px 20px; background: var(--marigold-soft); border-left: 4px solid var(--marigold); border-radius: 8px; max-width: 70ch; }
 
   footer { padding: 32px 0 48px; color: var(--muted); border-top: 1px solid var(--line); font-size: .9375rem; }
   footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
 
+  /* Security model: the reach diagram is the one loud thing on the page. */
+  .reach { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 40px 56px; align-items: center; }
+  .reach svg { display: block; width: 100%; height: auto; }
+  .reach svg text { font-family: var(--font); fill: var(--ink); }
+  .reach svg .sub { fill: var(--muted); }
+  .reach svg .link { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+  .reach svg .node rect { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+  .reach svg .in rect { fill: var(--brand-soft); stroke: var(--brand); stroke-width: 2; }
+  .reach svg .self rect { fill: var(--marigold-soft); stroke: var(--marigold); stroke-width: 2.5; }
+  .reach svg .out { opacity: .72; }
+  .legend { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+  .legend li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .legend i { width: 18px; height: 18px; margin-top: 4px; border-radius: 5px; border: 2px solid var(--line-strong); background: var(--surface); }
+  .legend .k-self { border-color: var(--marigold); background: var(--marigold-soft); }
+  .legend .k-in { border-color: var(--brand); background: var(--brand-soft); }
+  .legend strong { display: block; }
+  .legend span { color: var(--muted); }
+  .roles { margin-top: 44px; }
+  .roles th[scope="row"] { color: var(--ink); font-size: 1rem; white-space: nowrap; }
+
+  .gates { counter-reset: gate; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 0 28px; margin: 0; padding: 0; list-style: none; }
+  .gates li { counter-increment: gate; padding: 18px 0 20px; border-top: 3px solid var(--brand); }
+  .gates li::before { content: counter(gate); display: block; color: var(--brand); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .gates strong { display: block; margin-top: 2px; font-size: 1.1rem; }
+  .gates span { display: block; margin-top: 6px; color: var(--muted); font-size: .9375rem; }
+  .gates code { color: var(--ink); }
+
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 32px; }
+  .screens .shot figcaption strong { color: var(--ink); }
+
+  footer nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+
   @media (min-width: 980px) {
+    .gates { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .hero { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: center; padding-top: 64px; }
   }
   @media (max-width: 760px) {
-    .proof { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .proof, .reach, .screens { grid-template-columns: minmax(0, 1fr); gap: 28px; }
     .top nav a:not(:last-child) { display: none; }
     section { padding: 48px 0; }
   }
@@ -127,7 +162,8 @@
     <span>People<span>Base</span></span>
   </a>
   <nav aria-label="Project links">
-    <a href="#features">Features</a>
+    <a href="#security">Security model</a>
+    <a href="#screens">Screens</a>
     <a href="#run">Run it</a>
     <a href="https://github.com/patrickking67/peoplebase">GitHub</a>
   </nav>
@@ -136,32 +172,128 @@
 <main id="main">
   <div class="wrap hero">
     <div>
-      <h1>A small HR system you can read in one sitting.</h1>
-      <p class="lede">PeopleBase keeps employee records, departments, reporting lines, pay history and time off for a small team. It is one Flask file, a handful of templates and a test suite that covers every rule.</p>
+      <h1>People data, and who gets to see it.</h1>
+      <p class="lede">PeopleBase is a small HRIS in Flask: records, pay history, time off, onboarding, policies and an audit log. Employees, managers and HR sign in, and the server decides on every request what each of them may open.</p>
       <div class="actions">
         <a class="button" href="https://github.com/patrickking67/peoplebase">View the source</a>
-        <a class="button button-quiet" href="https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md">Read the architecture</a>
+        <a class="button button-quiet" href="https://github.com/patrickking67/peoplebase/blob/main/docs/security.md">Read the security model</a>
       </div>
     </div>
     <figure class="shot">
-      <img src="screenshot-dashboard.png" width="1200" height="750" alt="The PeopleBase dashboard in dark mode: 11 people at work across 5 departments, headcount bars by department, upcoming work anniversaries and who is out today." fetchpriority="high">
-      <figcaption>The dashboard, loaded with the built-in demo data.</figcaption>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/dashboard-dark.webp">
+        <img src="assets/dashboard-light.webp" width="2560" height="1600" alt="The PeopleBase dashboard signed in as an HR admin: 11 people at work across 5 departments, headcount bars by department, upcoming work anniversaries and who is out today." fetchpriority="high">
+      </picture>
+      <figcaption>The HR dashboard with the built-in demo company. Everyone in it is made up.</figcaption>
     </figure>
   </div>
+
+  <section id="security">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>The security model</h2>
+        <p>A role grants a capability. The reporting line decides how far it reaches. One module, <a href="https://github.com/patrickking67/peoplebase/blob/main/access.py"><code>access.py</code></a>, makes every decision.</p>
+      </div>
+      <div class="reach">
+        <svg viewBox="0 0 600 318" role="img" aria-labelledby="reach-title reach-desc">
+          <title id="reach-title">What Riley, a manager, can open</title>
+          <desc id="reach-desc">An org chart. Morgan is at the top with three reports: Riley, Harper and Emerson. Casey and Jordan report to Riley. Rowan reports to Harper. Riley's own box is marked as their own record, Casey and Jordan are marked as within reach, and Morgan, Harper, Emerson and Rowan are out of reach.</desc>
+          <path class="link" d="M300 62v32M140 94h380M140 94v30M360 94v30M520 94v30M140 186v32M70 218h140M70 218v30M210 218v30M360 186v62"/>
+          <g class="node out"><rect x="235" y="6" width="130" height="56" rx="10"/><text x="300" y="32" text-anchor="middle" font-size="16" font-weight="600">Morgan</text><text class="sub" x="300" y="51" text-anchor="middle" font-size="13">Manager</text></g>
+          <g class="node self"><rect x="65" y="124" width="150" height="62" rx="10"/><text x="140" y="150" text-anchor="middle" font-size="16" font-weight="600">Riley</text><text class="sub" x="140" y="169" text-anchor="middle" font-size="13">Manager, signed in</text></g>
+          <g class="node out"><rect x="295" y="124" width="130" height="62" rx="10"/><text x="360" y="150" text-anchor="middle" font-size="16" font-weight="600">Harper</text><text class="sub" x="360" y="169" text-anchor="middle" font-size="13">Manager</text></g>
+          <g class="node out"><rect x="455" y="124" width="130" height="62" rx="10"/><text x="520" y="150" text-anchor="middle" font-size="16" font-weight="600">Emerson</text><text class="sub" x="520" y="169" text-anchor="middle" font-size="13">HR admin</text></g>
+          <g class="node in"><rect x="5" y="248" width="130" height="62" rx="10"/><text x="70" y="274" text-anchor="middle" font-size="16" font-weight="600">Casey</text><text class="sub" x="70" y="293" text-anchor="middle" font-size="13">Employee</text></g>
+          <g class="node in"><rect x="145" y="248" width="130" height="62" rx="10"/><text x="210" y="274" text-anchor="middle" font-size="16" font-weight="600">Jordan</text><text class="sub" x="210" y="293" text-anchor="middle" font-size="13">Employee</text></g>
+          <g class="node out"><rect x="295" y="248" width="130" height="62" rx="10"/><text x="360" y="274" text-anchor="middle" font-size="16" font-weight="600">Rowan</text><text class="sub" x="360" y="293" text-anchor="middle" font-size="13">Employee</text></g>
+        </svg>
+        <ul class="legend">
+          <li><i class="k-self"></i><div><strong>Own record</strong><span>Profile, pay, leave balances, time off and checklist.</span></div></li>
+          <li><i class="k-in"></i><div><strong>Within reach</strong><span>Direct and indirect reports: profile, time off and checklists, and the say on their time off. Never their pay.</span></div></li>
+          <li><i></i><div><strong>Out of reach</strong><span>Peers, other teams and their own manager: a name in the directory and org chart, nothing more. Riley asking for Rowan's record gets the same 404 as a record that does not exist.</span></div></li>
+        </ul>
+      </div>
+      <div class="table-scroll roles">
+        <table>
+          <thead><tr><th scope="col">Role</th><th scope="col">Sees</th><th scope="col">Can change</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Employee</th><td>Own record, pay, leave balances and checklist; the directory and org chart</td><td>Own time-off requests, own policy acknowledgements, own password</td></tr>
+            <tr><th scope="row">Manager</th><td>The same, plus the records, time off and checklists of direct and indirect reports, without pay</td><td>Approve or deny reports' time off; tick their checklist tasks</td></tr>
+            <tr><th scope="row">HR admin</th><td>Everything, including pay, people who left, reports and the audit log</td><td>Records, departments, accounts and roles, policies</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>How a request is checked</h2>
+        <p>Every request passes the same gates, in this order, before a route does anything.</p>
+      </div>
+      <ol class="gates">
+        <li><strong>Session</strong><span>The signed cookie must match an active account and its current nonce, and be under 12 hours old. Otherwise: the sign-in page.</span></li>
+        <li><strong>CSRF</strong><span>Every POST needs the per-session token, sign-in and sign-out included. Otherwise: <code>400</code>.</span></li>
+        <li><strong>Role</strong><span>HR-only actions answer <code>403</code> to everyone else, whatever id is in the URL.</span></li>
+        <li><strong>Reach</strong><span>The record is loaded, then checked against the caller's reporting tree. Out of reach: <code>404</code>.</span></li>
+        <li><strong>Audit</strong><span>A change and its audit entry are saved in one transaction. The log refuses edits and deletes.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>What it looks like</h2>
+        <p>Captured from the running app with the demo data, in light or dark to match your system.</p>
+      </div>
+      <div class="screens">
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/approvals-dark.webp">
+        <img src="assets/approvals-light.webp" width="2560" height="1600" alt="A manager's time-off queue with two pending requests from their reports, each with Approve and Deny buttons. One notes that it is 2 working days more vacation than the person will have accrued by then." loading="lazy">
+      </picture>
+          <figcaption><strong>Approval queue.</strong> A manager sees requests from their reporting tree only, with a note when one runs past the leave balance.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/profile-dark.webp">
+        <img src="assets/profile-light.webp" width="2560" height="1600" alt="An employee profile seen by HR: employment details with salary, direct reports and a compensation history showing a hire and a promotion." loading="lazy">
+      </picture>
+          <figcaption><strong>Employee profile.</strong> Pay and its history show for HR and the employee, never for the manager.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/org-chart-dark.webp">
+        <img src="assets/org-chart-light.webp" width="2560" height="1600" alt="The org chart: the chief operating officer at the top with design, operations, people and engineering leads beneath and their reports under them." loading="lazy">
+      </picture>
+          <figcaption><strong>Org chart.</strong> Built from one manager field per person. Loops and self-management are refused.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/audit-log-dark.webp">
+        <img src="assets/audit-log-light.webp" width="2560" height="1600" alt="The audit log: rows for a sign-in, a directory CSV export, a completed checklist task and a pay change showing the old and new title and salary." loading="lazy">
+      </picture>
+          <figcaption><strong>Audit log.</strong> Who changed what, with old and new values. HR can read it; nobody can edit it.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
 
   <section id="features">
     <div class="wrap">
       <div class="section-head">
         <h2>What it keeps track of</h2>
-        <p>The everyday records a people lead at a small company needs, and nothing that needs a vendor contract.</p>
+        <p>The everyday records a people team at a small company needs.</p>
       </div>
       <dl class="features">
-        <div><dt>Employee records</dt><dd>Name, job title, salary, department, manager, start date and status: active, on leave or left.</dd></div>
-        <div><dt>Reporting lines</dt><dd>Pick a manager for anyone. Loops and self-management are refused, and the org chart draws the result.</dd></div>
-        <div><dt>Compensation history</dt><dd>Every title or salary change is kept with its effective date and reason, newest first on the profile.</dd></div>
-        <div><dt>Time off</dt><dd>Requests with dates, type and a note. The person's manager approves or denies; overlaps are caught.</dd></div>
-        <div><dt>Dashboard</dt><dd>Who is at work, headcount by department, anniversaries in the next 30 days and who is out today.</dd></div>
-        <div><dt>Directory and export</dt><dd>Search and filter by team, title and status, with payroll totals and a CSV of exactly what you see.</dd></div>
+        <div><dt>People and reporting lines</dt><dd>Records with department, manager, status, start date and last day, a searchable directory and the org chart.</dd></div>
+        <div><dt>Pay history</dt><dd>Every title or salary change with its effective date and reason, and a CSV export that spreadsheets cannot run as formulas.</dd></div>
+        <div><dt>Time off and leave balances</dt><dd>Requests, approval up the reporting line, and balances per leave type that accrue monthly in working days.</dd></div>
+        <div><dt>Onboarding and offboarding</dt><dd>A checklist for each new hire and each leaver. Marking someone as left turns off their account.</dd></div>
+        <div><dt>Policy acknowledgements</dt><dd>Published text never changes. A revision is a new version, and everyone is asked again.</dd></div>
+        <div><dt>Headcount and attrition</dt><dd>Twelve months of hires, leavers and headcount, with a CSV cut to the viewer's own reporting tree.</dd></div>
       </dl>
     </div>
   </section>
@@ -169,15 +301,15 @@
   <section id="details">
     <div class="wrap proof">
       <div>
-        <p class="count">192</p>
+        <p class="count">525</p>
         <p class="count-label">tests run on every pull request, on Python 3.11, 3.12 and 3.13.</p>
       </div>
       <ul class="checks">
-        <li><strong>Forms carry CSRF tokens</strong><span>Checked in constant time. Session cookies are HttpOnly and SameSite=Lax.</span></li>
-        <li><strong>A strict Content-Security-Policy</strong><span>No inline script anywhere, plus nosniff, frame denial and a 64 KiB request limit.</span></li>
-        <li><strong>Spreadsheet-safe CSV</strong><span>Cells that start with =, +, -, @, tab or carriage return are exported as text, not formulas.</span></li>
-        <li><strong>Validation at every boundary</strong><span>Plain-number salaries rounded to cents, real calendar dates, no control characters, ids the database can store.</span></li>
-        <li><strong>Upgrades in place</strong><span>Databases from earlier versions get the new columns on startup. No migration step to forget.</span></li>
+        <li><strong>16 abuse cases, each with a test</strong><span>Changing ids in URLs, forged form fields, session replay, password guessing, export scope and more, written down before the code.</span></li>
+        <li><strong>Every route declares who may call it</strong><span>One test holds the route-by-role table and fails when a route is added without an entry.</span></li>
+        <li><strong>Argon2id passwords and a lockout that leaks nothing</strong><span>Five failures lock an email for 15 minutes, whether or not it has an account.</span></li>
+        <li><strong>Migrations tested against old databases</strong><span>Three earlier schema shapes upgrade to one, checked on SQLite and PostgreSQL.</span></li>
+        <li><strong>The basics, kept</strong><span>CSRF on every form, a Content-Security-Policy without inline script, no-store pages and a 64 KiB request limit.</span></li>
       </ul>
     </div>
   </section>
@@ -186,45 +318,26 @@
     <div class="wrap">
       <div class="section-head">
         <h2>Run it locally</h2>
-        <p>Python 3.11 or newer. The demo data uses made-up people named "Example".</p>
+        <p>Python 3.11 or newer. The demo flag loads made-up people named "Example" and prints three sign-ins with a password generated for that run.</p>
       </div>
-<pre><code>git clone https://github.com/patrickking67/peoplebase.git
-cd peoplebase
-python3 -m venv .venv &amp;&amp; source .venv/bin/activate
-pip install -r requirements-dev.txt
-export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-flask --app app seed-demo              <span class="cmt"># optional demo data</span>
-flask --app app run --debug            <span class="cmt"># http://127.0.0.1:5000</span>
+<pre><code>git clone https://github.com/patrickking67/peoplebase.git &amp;&amp; cd peoplebase
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements-dev.txt
+./scripts/dev.sh --demo                <span class="cmt"># http://127.0.0.1:4104</span>
 
 ./scripts/check.sh                     <span class="cmt"># lint, tests and repo checks</span></code></pre>
-    </div>
-  </section>
-
-  <section id="config">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Configuration</h2>
-        <p>Environment variables. Only <code>SECRET_KEY</code> is required.</p>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th scope="col">Variable</th><th scope="col">What it does</th><th scope="col">Default</th></tr></thead>
-          <tbody>
-            <tr><td><code>SECRET_KEY</code></td><td>Signs the session cookie, flash messages and CSRF tokens</td><td>None. The app will not start without it.</td></tr>
-            <tr><td><code>DATABASE_URL</code></td><td>Any SQLAlchemy database URL</td><td>SQLite at <code>instance/employees.db</code></td></tr>
-            <tr><td><code>FLASK_DEBUG</code></td><td>Turns on the debugger for <code>python app.py</code></td><td>Off</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note"><strong>PeopleBase has no sign-in.</strong> Anyone who can reach it can read and change every record. Keep it on a private network with demo data, or add authentication before it holds real people.</p>
     </div>
   </section>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>MIT licensed. Built with Flask and SQLAlchemy.</span>
-    <span><a href="https://github.com/patrickking67/peoplebase">github.com/patrickking67/peoplebase</a></span>
+    <span>MIT licensed. Built by <a href="https://github.com/patrickking67">Patrick King</a> with Flask and SQLAlchemy.</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/patrickking67/peoplebase">Source</a>
+      <a href="https://github.com/patrickking67/peoplebase/blob/main/docs/security.md">Security model</a>
+      <a href="https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md">Architecture</a>
+      <a href="https://github.com/patrickking67/peoplebase/blob/main/README.md">README</a>
+    </nav>
   </div>
 </footer>
 </body>

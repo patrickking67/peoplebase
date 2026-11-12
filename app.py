@@ -1,19 +1,28 @@
 import csv
 import hmac
+import json
 import math
 import os
 import re
 import secrets
-from datetime import UTC, date, datetime, timedelta
+import time
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from functools import wraps
 from io import StringIO
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import click
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 from flask import (
     Flask,
     abort,
+    current_app,
     flash,
+    g,
+    has_request_context,
     make_response,
     redirect,
     render_template,
@@ -21,14 +30,39 @@ from flask import (
     session,
     url_for,
 )
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect, text
+from flask_migrate import Migrate
+from sqlalchemy import inspect
 from werkzeug.exceptions import HTTPException, InternalServerError
 
-db = SQLAlchemy()
+from access import Access
+from models import (
+    AUDIT_ACTIONS,
+    AUDIT_GROUPS,
+    CHECKLIST_KINDS,
+    EMPLOYMENT_STATUSES,
+    ROLES,
+    TIME_OFF_DECISIONS,
+    TIME_OFF_KINDS,
+    TIME_OFF_STATUSES,
+    Account,
+    Acknowledgement,
+    AuditEvent,
+    ChecklistTask,
+    CompensationChange,
+    Department,
+    Employee,
+    LoginThrottle,
+    Policy,
+    TimeOffRequest,
+    checklist_progress,
+    db,
+    utcnow,
+)
+from reports import headcount_report
 
 MAX_SALARY = Decimal("999999999.99")
 DEFAULT_PER_PAGE = 25
+AUDIT_PER_PAGE = 50
 MAX_PER_PAGE = 100
 CSRF_SESSION_KEY = "_csrf_token"
 CSRF_FORM_FIELD = "csrf_token"
@@ -54,131 +88,29 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
-
-EMPLOYMENT_STATUSES = {
-    "active": "Active",
-    "on_leave": "On leave",
-    "terminated": "Terminated",
-}
-TIME_OFF_KINDS = {"vacation": "Vacation", "sick": "Sick leave", "personal": "Personal"}
-TIME_OFF_STATUSES = {"pending": "Pending", "approved": "Approved", "denied": "Denied"}
-TIME_OFF_DECISIONS = {"approve": "approved", "deny": "denied"}
 MAX_TIME_OFF_DAYS = 60
-# Columns added to the original employee table. db.create_all() never alters an
-# existing table, so upgrade_schema() adds any that an older database lacks.
-EMPLOYEE_UPGRADE_COLUMNS = {
-    "department_id": "INTEGER REFERENCES department (id)",
-    "manager_id": "INTEGER REFERENCES employee (id)",
-    "status": "VARCHAR(20) NOT NULL DEFAULT 'active'",
-    "start_date": "DATE",
-}
+MAX_POLICY_LENGTH = 20_000
+# Policy text keeps its line breaks, so only the other control characters are refused.
+POLICY_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
+# Sign-in. See docs/security.md for the reasoning behind each number.
+SESSION_LIFETIME = timedelta(hours=12)
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_MAX_LENGTH = 128
+EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+LOGIN_WINDOW = timedelta(minutes=15)
+LOGIN_LOCK = timedelta(minutes=15)
+# Failures inside one window before the key is locked.
+LOGIN_LIMITS = {"email": 5, "ip": 20}
+LOGIN_FAILED_MESSAGE = "Email or password is incorrect."
+LOGIN_LOCKED_MESSAGE = "Too many failed sign-ins. Wait 15 minutes and try again."
+# Endpoints that work without a session, and the ones an account with a
+# temporary password may still reach.
+PUBLIC_ENDPOINTS = frozenset({"login", "static"})
+TEMPORARY_PASSWORD_ENDPOINTS = frozenset({"change_password", "logout", "static"})
+MIGRATIONS_DIRECTORY = Path(__file__).resolve().parent / "migrations"
 
-def utcnow():
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
-class Department(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
-
-    employees = db.relationship("Employee", back_populates="department")
-
-    def __repr__(self):
-        return f"<Department {self.name}>"
-
-
-class Employee(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    position = db.Column(db.String(100), nullable=False)
-    salary = db.Column(db.Numeric(12, 2), nullable=False)
-    department_id = db.Column(db.Integer, db.ForeignKey("department.id"), nullable=True)
-    manager_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True)
-    status = db.Column(db.String(20), nullable=False, default="active", server_default="active")
-    start_date = db.Column(db.Date, nullable=True)
-
-    department = db.relationship("Department", back_populates="employees")
-    manager = db.relationship("Employee", remote_side=[id], back_populates="reports")
-    reports = db.relationship("Employee", back_populates="manager", order_by="Employee.name")
-    compensation_history = db.relationship(
-        "CompensationChange",
-        back_populates="employee",
-        cascade="all, delete-orphan",
-        order_by="(CompensationChange.effective_date.desc(), CompensationChange.id.desc())",
-    )
-
-    time_off_requests = db.relationship(
-        "TimeOffRequest",
-        back_populates="employee",
-        foreign_keys="TimeOffRequest.employee_id",
-        cascade="all, delete-orphan",
-        order_by="TimeOffRequest.start_date.desc()",
-    )
-
-    @property
-    def status_label(self):
-        return EMPLOYMENT_STATUSES.get(self.status, self.status)
-
-    def __repr__(self):
-        return f"<Employee {self.name}>"
-
-
-class CompensationChange(db.Model):
-    """One row per change to an employee's title or salary, with the date it takes effect."""
-
-    id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
-    position = db.Column(db.String(100), nullable=False)
-    salary = db.Column(db.Numeric(12, 2), nullable=False)
-    effective_date = db.Column(db.Date, nullable=False)
-    reason = db.Column(db.String(100), nullable=False, default="")
-    recorded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-
-    employee = db.relationship("Employee", back_populates="compensation_history")
-
-
-class TimeOffRequest(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
-    kind = db.Column(db.String(20), nullable=False)
-    start_date = db.Column(db.Date, nullable=False)
-    end_date = db.Column(db.Date, nullable=False)
-    note = db.Column(db.String(200), nullable=False, default="")
-    status = db.Column(db.String(20), nullable=False, default="pending")
-    requested_at = db.Column(db.DateTime, nullable=False, default=utcnow)
-    decided_by_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True)
-    decided_at = db.Column(db.DateTime, nullable=True)
-
-    employee = db.relationship(
-        "Employee", foreign_keys=[employee_id], back_populates="time_off_requests"
-    )
-    decided_by = db.relationship("Employee", foreign_keys=[decided_by_id])
-
-    @property
-    def days(self):
-        """Calendar days covered, counting both the first and last day."""
-        return (self.end_date - self.start_date).days + 1
-
-    @property
-    def kind_label(self):
-        return TIME_OFF_KINDS.get(self.kind, self.kind)
-
-    @property
-    def status_label(self):
-        return TIME_OFF_STATUSES.get(self.status, self.status)
-
-    def approver_choices(self):
-        """Who may decide this request: the direct manager, or when there is no
-        current manager, anyone else who still works here."""
-        manager = self.employee.manager
-        if manager is not None and manager.status != "terminated":
-            return [manager]
-        return db.session.scalars(
-            db.select(Employee)
-            .where(Employee.id != self.employee_id, Employee.status != "terminated")
-            .order_by(Employee.name, Employee.id)
-        ).all()
+migrate = Migrate()
 
 
 def create_app(test_config=None):
@@ -191,6 +123,13 @@ def create_app(test_config=None):
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_HTTPONLY=True,
+        # Set SESSION_COOKIE_SECURE=1 wherever the app is served over HTTPS.
+        SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE") == "1",
+        PERMANENT_SESSION_LIFETIME=SESSION_LIFETIME,
+        # Argon2id cost settings; empty means the argon2-cffi defaults.
+        # Tests pass cheaper ones so the suite stays fast.
+        PASSWORD_HASH_OPTIONS={},
         MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
     )
 
@@ -206,10 +145,36 @@ def create_app(test_config=None):
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
+    # The schema is owned by the versioned migrations in migrations/versions.
+    # Nothing is created at startup: run "flask --app app db upgrade".
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIRECTORY), render_as_batch=True, compare_type=True)
+    hasher = PasswordHasher(**app.config["PASSWORD_HASH_OPTIONS"])
+    app.extensions["password_hasher"] = hasher
+    # Verified when the email has no account, so both cases cost one hash.
+    app.extensions["password_decoy"] = hasher.hash(secrets.token_urlsafe(16))
     app.jinja_env.globals["csrf_token"] = get_csrf_token
+    app.jinja_env.globals["ROLES"] = ROLES
+    app.jinja_env.globals["CHECKLIST_KINDS"] = CHECKLIST_KINDS
+    app.jinja_env.filters["days"] = format_days
+    app.jinja_env.globals["checklist_progress"] = checklist_progress
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
     app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
     app.jinja_env.globals["TIME_OFF_STATUSES"] = TIME_OFF_STATUSES
+
+    @app.before_request
+    def load_account():
+        """Resolve the session cookie to an account, or to nobody."""
+        g.account = None
+        g.access = Access(None)
+        if request.endpoint == "static" or "account_id" not in session:
+            return None
+        account = db.session.get(Account, session.get("account_id"))
+        if account is None or not session_is_current(account):
+            session.clear()
+            return None
+        g.account = account
+        g.access = Access(account)
+        return None
 
     @app.before_request
     def protect_from_csrf():
@@ -227,10 +192,29 @@ def create_app(test_config=None):
             )
         return None
 
+    @app.before_request
+    def require_sign_in():
+        if request.endpoint in PUBLIC_ENDPOINTS or request.endpoint is None:
+            return None
+        if g.account is None:
+            target = request.full_path.rstrip("?") if request.method == "GET" else None
+            return redirect(url_for("login", next=target))
+        if g.account.must_change_password and request.endpoint not in TEMPORARY_PASSWORD_ENDPOINTS:
+            flash("Choose your own password before you continue.", "info")
+            return redirect(url_for("change_password"))
+        return None
+
+    @app.context_processor
+    def inject_account():
+        return {"current_account": g.get("account"), "access": g.get("access") or Access(None)}
+
     @app.after_request
     def add_security_headers(response):
         for header, value in SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)
+        if request.endpoint != "static":
+            # Pay and leave data must not come back from a browser or proxy cache.
+            response.headers["Cache-Control"] = "no-store"
         return response
 
     @app.errorhandler(HTTPException)
@@ -243,9 +227,146 @@ def create_app(test_config=None):
         db.session.rollback()
         return render_template("error.html", error=InternalServerError()), 500
 
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if g.account is not None:
+            return redirect(url_for("home"))
+        if request.method == "GET":
+            return render_template("login.html", next=safe_next(request.args.get("next")), email="")
+
+        email = normalize_email(request.form.get("email", ""))
+        password = request.form.get("password", "")
+        next_url = safe_next(request.form.get("next"))
+        now = utcnow()
+        keys = {"email": f"email:{email}", "ip": f"ip:{request.remote_addr or 'unknown'}"}
+
+        if any(throttle_locked(key, now) for key in keys.values()):
+            flash(LOGIN_LOCKED_MESSAGE, "error")
+            return render_template("login.html", next=next_url, email=email), 429
+
+        account = db.session.scalar(db.select(Account).where(Account.email == email)) if email else None
+        if not password_matches(account, password) or not may_sign_in(account):
+            for name, key in keys.items():
+                record_failed_login(key, LOGIN_LIMITS[name], now)
+            # The email is recorded as typed. The password never is.
+            audit("auth.sign_in_failed", label=email or "(no email)")
+            db.session.commit()
+            flash(LOGIN_FAILED_MESSAGE, "error")
+            return render_template("login.html", next=next_url, email=email), 401
+
+        clear_throttle(keys["email"])
+        upgrade_password_hash(account, password)
+        account.last_login_at = now
+        audit("auth.signed_in", account, actor=account)
+        db.session.commit()
+        start_session(account)
+        return redirect(next_url or url_for("home"))
+
+    @app.post("/logout")
+    def logout():
+        # Rotating the nonce also ends this account's sessions in other browsers.
+        g.account.end_sessions()
+        audit("auth.signed_out", g.account)
+        db.session.commit()
+        session.clear()
+        flash("You are signed out.", "success")
+        return redirect(url_for("login"))
+
+    @app.route("/account/password", methods=["GET", "POST"])
+    def change_password():
+        account = g.account
+        if request.method == "POST":
+            new_password, error = validate_new_password(request.form, account)
+            if not error and not password_matches(account, request.form.get("current_password", "")):
+                error = "Your current password is incorrect."
+            if error:
+                flash(error, "error")
+                return render_template("change_password.html"), 400
+            account.password_hash = hash_password(new_password)
+            account.must_change_password = False
+            account.end_sessions()
+            audit("auth.password_changed", account)
+            db.session.commit()
+            # Every other session is now signed out; keep this one.
+            start_session(account)
+            flash("Your password is changed. Other sessions were signed out.", "success")
+            return redirect(url_for("home"))
+        return render_template("change_password.html")
+
+    @app.get("/accounts")
+    @admin_only
+    def view_accounts():
+        return render_accounts({})
+
+    @app.post("/accounts")
+    @admin_only
+    def add_account():
+        values, error = validate_account(request.form)
+        if error:
+            flash(error, "error")
+            return render_accounts(request.form), 400
+        password = new_temporary_password()
+        account = Account(**values, password_hash=hash_password(password), must_change_password=True)
+        db.session.add(account)
+        audit(
+            "account.created", account, role=account.role, employee=account.employee.name if account.employee else None
+        )
+        db.session.commit()
+        flash(f"Created an account for {account.email}.", "success")
+        return render_accounts({}, issued=(account, password)), 201
+
+    @app.post("/accounts/<int:account_id>/role")
+    @admin_only
+    def change_account_role(account_id):
+        account = db.get_or_404(Account, account_id)
+        old_role = account.role
+        error = apply_role_change(account, request.form.get("role", "").strip(), g.account)
+        if error:
+            flash(error, "error")
+        else:
+            if account.role != old_role:
+                audit("account.role_changed", account, role=[old_role, account.role])
+            db.session.commit()
+            flash(f"{account.email} is now {account.role_label}.", "success")
+        return redirect(url_for("view_accounts"))
+
+    @app.post("/accounts/<int:account_id>/active")
+    @admin_only
+    def set_account_active(account_id):
+        account = db.get_or_404(Account, account_id)
+        was_active = account.active
+        error = apply_active_change(account, request.form.get("active") == "1", g.account)
+        if error:
+            flash(error, "error")
+        else:
+            if account.active != was_active:
+                audit("account.turned_on" if account.active else "account.turned_off", account)
+            db.session.commit()
+            flash(f"{account.email} {'can sign in again' if account.active else 'can no longer sign in'}.", "success")
+        return redirect(url_for("view_accounts"))
+
+    @app.post("/accounts/<int:account_id>/password")
+    @admin_only
+    def reset_account_password(account_id):
+        account = db.get_or_404(Account, account_id)
+        if account.id == g.account.id:
+            flash("Change your own password from the Password page.", "error")
+            return redirect(url_for("view_accounts"))
+        password = new_temporary_password()
+        account.password_hash = hash_password(password)
+        account.must_change_password = True
+        account.end_sessions()
+        clear_throttle(f"email:{account.email}")
+        audit("account.password_reset", account)
+        db.session.commit()
+        flash(f"Reset the password for {account.email}.", "success")
+        return render_accounts({}, issued=(account, password))
+
     @app.get("/")
     def home():
         today = date.today()
+        if not g.access.is_admin:
+            return render_personal_home(today)
         employees = db.session.scalars(db.select(Employee).order_by(Employee.name)).all()
         current = [employee for employee in employees if employee.status != "terminated"]
         out_today = db.session.scalars(
@@ -272,6 +393,7 @@ def create_app(test_config=None):
             anniversaries=upcoming_anniversaries(current, today),
             out_today=out_today,
             pending_count=pending_count,
+            policies=outstanding_policies(g.account.employee),
             today=today,
         )
 
@@ -286,12 +408,12 @@ def create_app(test_config=None):
 
     @app.get("/employees")
     def view_employees():
-        criteria = directory_criteria(request.args)
+        criteria = directory_criteria(request.args, g.access)
         page = max(request.args.get("page", 1, type=int), 1)
         per_page = request.args.get("per_page", DEFAULT_PER_PAGE, type=int)
         per_page = min(max(per_page, 1), MAX_PER_PAGE)
 
-        filters = employee_filters(**criteria)
+        filters = directory_filters(criteria, g.access)
         summary = summarize_employees(filters)
         # Clamp to the last page before querying. A page past the end shows the
         # last page, and a huge page number never reaches the database as an
@@ -302,7 +424,10 @@ def create_app(test_config=None):
         pagination = db.paginate(statement, page=page, per_page=per_page, error_out=False)
 
         positions = db.session.scalars(
-            db.select(Employee.position).distinct().order_by(Employee.position)
+            db.select(Employee.position)
+            .where(*directory_filters({}, g.access))
+            .distinct()
+            .order_by(Employee.position)
         ).all()
         filter_args = {
             "q": criteria["search"] or None,
@@ -330,11 +455,13 @@ def create_app(test_config=None):
         )
 
     @app.get("/employees.csv")
+    @admin_only
     def export_employees():
-        criteria = directory_criteria(request.args)
+        # The export carries salary, so it is HR-only whatever the filters say.
+        criteria = directory_criteria(request.args, g.access)
         employees = db.session.scalars(
             db.select(Employee)
-            .where(*employee_filters(**criteria))
+            .where(*directory_filters(criteria, g.access))
             .order_by(Employee.name, Employee.id)
         ).all()
         output = StringIO()
@@ -350,6 +477,8 @@ def create_app(test_config=None):
                 ]
             )
 
+        audit("export.directory_csv", rows=len(employees), filters={k: v for k, v in criteria.items() if v})
+        db.session.commit()
         response = make_response(output.getvalue())
         response.headers["Content-Type"] = "text/csv; charset=utf-8"
         response.headers["Content-Disposition"] = "attachment; filename=peoplebase-employees.csv"
@@ -358,6 +487,7 @@ def create_app(test_config=None):
         return response
 
     @app.route("/employees/new", methods=["GET", "POST"])
+    @admin_only
     def add_employee():
         if request.method == "POST":
             values, error = validate_employee(request.form)
@@ -376,7 +506,9 @@ def create_app(test_config=None):
                     reason="Hired",
                 )
             )
+            employee.start_checklist("offboarding" if employee.status == "terminated" else "onboarding")
             db.session.add(employee)
+            audit("employee.created", employee, **employee_snapshot(employee))
             db.session.commit()
             flash(f"Added {employee.name}.", "success")
             return redirect(url_for("employee_profile", employee_id=employee.id))
@@ -386,15 +518,21 @@ def create_app(test_config=None):
     @app.get("/employees/<int:employee_id>")
     def employee_profile(employee_id):
         employee = db.get_or_404(Employee, employee_id)
+        if not g.access.can_view_profile(employee):
+            # The same answer as a record that does not exist, so ids cannot be probed.
+            abort(404)
         return render_template("employee.html", employee=employee, today=date.today())
 
     @app.route("/employees/<int:employee_id>/edit", methods=["GET", "POST"])
+    @admin_only
     def update_employee(employee_id):
         employee = db.get_or_404(Employee, employee_id)
         if request.method == "POST":
             values, error = validate_employee(request.form)
             if not error:
                 details, error = validate_employment(request.form, employee)
+            if not error and details["status"] == "terminated" and g.access.is_self(employee):
+                error = "You cannot mark your own record as left. Ask another HR admin."
             if not error:
                 change, error = validate_compensation_change(request.form, employee, values)
             if error:
@@ -403,10 +541,35 @@ def create_app(test_config=None):
                     "update_employee.html", employee, request.form
                 ), 400
 
+            before = employee_snapshot(employee)
             for field, value in {**values, **details}.items():
                 setattr(employee, field, value)
             if change:
                 employee.compensation_history.append(change)
+                audit(
+                    "compensation.changed",
+                    employee,
+                    position=[before["position"], change.position],
+                    salary=[before["salary"], str(change.salary)],
+                    effective_date=change.effective_date,
+                    reason=change.reason,
+                )
+            after = employee_snapshot(employee)
+            # Pay and title have their own entry above; this one covers the rest.
+            changed = {
+                field: [before[field], after[field]]
+                for field in after
+                if before[field] != after[field] and field not in {"position", "salary"}
+            }
+            if changed:
+                audit("employee.updated", employee, **changed)
+            if employee.status == "terminated":
+                close_account(employee, unlink=False)
+                employee.start_checklist("offboarding")
+            elif before["status"] == "terminated":
+                # Back on staff: a later departure starts a fresh offboarding list.
+                for task in employee.checklist("offboarding"):
+                    employee.checklist_tasks.remove(task)
             db.session.commit()
             flash(f"Updated {employee.name}.", "success")
             return redirect(url_for("employee_profile", employee_id=employee.id))
@@ -414,9 +577,15 @@ def create_app(test_config=None):
         return render_employee_form("update_employee.html", employee, {})
 
     @app.post("/employees/<int:employee_id>/delete")
+    @admin_only
     def delete_employee(employee_id):
         employee = db.get_or_404(Employee, employee_id)
+        if g.access.is_self(employee):
+            flash("You cannot delete your own record. Ask another HR admin.", "error")
+            return redirect(url_for("employee_profile", employee_id=employee.id))
         employee_name = employee.name
+        audit("employee.deleted", employee, **employee_snapshot(employee))
+        close_account(employee, unlink=True)
         # SQLite does not enforce foreign keys by default, so clear references here.
         for report in employee.reports:
             report.manager = None
@@ -431,10 +600,12 @@ def create_app(test_config=None):
         return redirect(url_for("view_employees"))
 
     @app.get("/departments")
+    @admin_only
     def view_departments():
         return render_template("departments.html", departments=department_headcounts(), values={})
 
     @app.post("/departments")
+    @admin_only
     def add_department():
         name, error = validate_department_name(request.form)
         if error:
@@ -442,12 +613,15 @@ def create_app(test_config=None):
             return render_template(
                 "departments.html", departments=department_headcounts(), values=request.form
             ), 400
-        db.session.add(Department(name=name))
+        department = Department(name=name)
+        db.session.add(department)
+        audit("department.created", department)
         db.session.commit()
         flash(f"Added the {name} department.", "success")
         return redirect(url_for("view_departments"))
 
     @app.post("/departments/<int:department_id>/rename")
+    @admin_only
     def rename_department(department_id):
         department = db.get_or_404(Department, department_id)
         name, error = validate_department_name(request.form, department)
@@ -465,11 +639,13 @@ def create_app(test_config=None):
             return redirect(url_for("view_departments"))
         old_name = department.name
         department.name = name
+        audit("department.renamed", department, name=[old_name, name])
         db.session.commit()
         flash(f"Renamed {old_name} to {name}.", "success")
         return redirect(url_for("view_departments"))
 
     @app.post("/departments/<int:department_id>/delete")
+    @admin_only
     def delete_department(department_id):
         department = db.get_or_404(Department, department_id)
         if department.employees:
@@ -480,6 +656,7 @@ def create_app(test_config=None):
                 "error",
             )
             return redirect(url_for("view_departments"))
+        audit("department.deleted", department)
         db.session.delete(department)
         db.session.commit()
         flash(f"Deleted the {department.name} department.", "success")
@@ -495,40 +672,56 @@ def create_app(test_config=None):
         )
         if status:
             statement = statement.where(TimeOffRequest.status == status)
+        visible = g.access.visible_profile_ids()
+        if visible is not None:
+            statement = statement.where(TimeOffRequest.employee_id.in_(visible))
         return render_template(
             "time_off.html",
             requests=db.session.scalars(statement).all(),
             selected_status=status,
+            today=date.today(),
         )
 
     @app.route("/time-off/new", methods=["GET", "POST"])
     def request_time_off():
         if request.method == "POST":
-            time_off, error = validate_time_off(request.form)
+            time_off, error = validate_time_off(request.form, g.access)
             if error:
                 flash(error, "error")
                 return render_time_off_form(request.form), 400
             db.session.add(time_off)
+            audit("time_off.requested", time_off, **time_off_snapshot(time_off))
             db.session.commit()
             flash(
                 f"Requested {time_off.days} {'day' if time_off.days == 1 else 'days'} "
                 f"off for {time_off.employee.name}.",
                 "success",
             )
+            short = time_off.shortfall(date.today())
+            if short:
+                # Not refused: going past the balance is the approver's call.
+                flash(
+                    f"This is {format_days(short)} working {'day' if short == 1 else 'days'} more "
+                    f"{time_off.kind_label.lower()} than will have accrued by then. The approver will see that.",
+                    "info",
+                )
             return redirect(url_for("view_time_off"))
         values = {}
         employee_id = request.args.get("employee", "")
-        if is_small_id(employee_id):
+        if g.access.is_admin and is_small_id(employee_id):
             values["employee_id"] = employee_id
         return render_time_off_form(values)
 
     @app.post("/time-off/<int:request_id>/decide")
     def decide_time_off(request_id):
         time_off = db.get_or_404(TimeOffRequest, request_id)
-        error = apply_time_off_decision(time_off, request.form)
+        if not g.access.can_view_profile(time_off.employee):
+            abort(404)
+        error = apply_time_off_decision(time_off, request.form, g.access)
         if error:
             flash(error, "error")
         else:
+            audit(f"time_off.{time_off.status}", time_off, **time_off_snapshot(time_off))
             db.session.commit()
             flash(
                 f"{time_off.status_label} {time_off.employee.name}'s time off "
@@ -537,9 +730,201 @@ def create_app(test_config=None):
             )
         return redirect(url_for("view_time_off"))
 
+    @app.get("/checklists")
+    def view_checklists():
+        """People with onboarding or offboarding still open, within reach."""
+        if not (g.access.is_admin or g.access.is_manager):
+            abort(403, description="This page is for managers and HR admins.")
+        statement = (
+            db.select(Employee)
+            .where(Employee.checklist_tasks.any(ChecklistTask.completed_at.is_(None)))
+            .order_by(Employee.name, Employee.id)
+        )
+        if not g.access.is_admin:
+            statement = statement.where(Employee.id.in_(g.access.reports))
+        rows = []
+        for employee in db.session.scalars(statement):
+            for kind in CHECKLIST_KINDS:
+                tasks = employee.checklist(kind)
+                if any(not task.done for task in tasks):
+                    rows.append({"employee": employee, "kind": kind, "tasks": tasks})
+        return render_template("checklists.html", rows=rows)
+
+    @app.post("/checklists/<int:task_id>")
+    def update_checklist_task(task_id):
+        task = db.get_or_404(ChecklistTask, task_id)
+        if not g.access.can_view_profile(task.employee):
+            abort(404)
+        if not g.access.can_update_checklist(task.employee):
+            abort(403, description="Only this person's managers or HR can update their checklist.")
+        done = request.form.get("done") == "1"
+        if done != task.done:
+            task.completed_at = utcnow() if done else None
+            task.completed_by = g.account.email if done else None
+            audit(
+                "checklist.completed" if done else "checklist.reopened",
+                task,
+                task=task.title,
+                checklist=task.kind,
+            )
+            db.session.commit()
+        back = safe_next(request.form.get("next"))
+        return redirect(back or url_for("employee_profile", employee_id=task.employee_id))
+
+    @app.get("/policies")
+    def view_policies():
+        policies = db.session.scalars(
+            db.select(Policy).where(Policy.retired_at.is_(None)).order_by(Policy.title, Policy.id)
+        ).all()
+        own = acknowledged_policy_ids(g.account.employee)
+        staff_count = current_staff_count()
+        rows = [
+            {
+                "policy": policy,
+                "acknowledged_at": own.get(policy.id),
+                # Company-wide progress is for HR only.
+                "done": acknowledgement_count(policy) if g.access.is_admin else None,
+            }
+            for policy in policies
+        ]
+        return render_template("policies.html", rows=rows, staff_count=staff_count)
+
+    @app.route("/policies/new", methods=["GET", "POST"])
+    @admin_only
+    def add_policy():
+        if request.method == "POST":
+            values, error = validate_policy(request.form)
+            if error:
+                flash(error, "error")
+                return render_template("policy_form.html", policy=None, values=request.form), 400
+            policy = Policy(**values, published_by=g.account.email)
+            db.session.add(policy)
+            audit("policy.published", policy)
+            db.session.commit()
+            flash(f"Published {policy.title}. Everyone on staff is asked to acknowledge it.", "success")
+            return redirect(url_for("view_policy", policy_id=policy.id))
+        return render_template("policy_form.html", policy=None, values={})
+
+    @app.get("/policies/<int:policy_id>")
+    def view_policy(policy_id):
+        policy = visible_policy_or_404(policy_id)
+        employee = g.account.employee
+        acknowledged_at = acknowledged_policy_ids(employee).get(policy.id)
+        progress = None
+        if g.access.is_admin:
+            staff = db.session.scalars(
+                db.select(Employee).where(Employee.status != "terminated").order_by(Employee.name, Employee.id)
+            ).all()
+            when = {item.employee_id: item.acknowledged_at for item in policy.acknowledgements}
+            progress = [(person, when.get(person.id)) for person in staff]
+        return render_template(
+            "policy.html", policy=policy, employee=employee, acknowledged_at=acknowledged_at, progress=progress
+        )
+
+    @app.post("/policies/<int:policy_id>/acknowledge")
+    def acknowledge_policy(policy_id):
+        policy = visible_policy_or_404(policy_id)
+        # Always the signed-in person's own record. Nobody acknowledges for anyone else.
+        employee = g.account.employee
+        if employee is None:
+            abort(400, description="Your account is not linked to an employee record, so there is nothing to sign.")
+        if not policy.current:
+            abort(400, description="This policy has been replaced or retired.")
+        if policy.id not in acknowledged_policy_ids(employee):
+            db.session.add(Acknowledgement(policy=policy, employee=employee))
+            audit("policy.acknowledged", policy, employee=employee.name)
+            db.session.commit()
+            flash(f"Recorded: you have read {policy.title}.", "success")
+        return redirect(url_for("view_policies"))
+
+    @app.route("/policies/<int:policy_id>/revise", methods=["GET", "POST"])
+    @admin_only
+    def revise_policy(policy_id):
+        policy = db.get_or_404(Policy, policy_id)
+        if not policy.current:
+            abort(400, description="This policy has already been replaced or retired.")
+        if request.method == "POST":
+            values, error = validate_policy(request.form)
+            if error:
+                flash(error, "error")
+                return render_template("policy_form.html", policy=policy, values=request.form), 400
+            if values["title"] == policy.title and values["body"] == policy.body:
+                flash("Nothing changed, so nobody is asked to acknowledge it again.", "info")
+                return redirect(url_for("view_policy", policy_id=policy.id))
+            revision = Policy(**values, published_by=g.account.email, replaces=policy)
+            policy.retired_at = utcnow()
+            db.session.add(revision)
+            audit("policy.revised", revision, replaces=policy.id)
+            db.session.commit()
+            flash(f"Published a new version of {revision.title}. Everyone is asked to acknowledge it again.", "success")
+            return redirect(url_for("view_policy", policy_id=revision.id))
+        return render_template("policy_form.html", policy=policy, values={})
+
+    @app.post("/policies/<int:policy_id>/retire")
+    @admin_only
+    def retire_policy(policy_id):
+        policy = db.get_or_404(Policy, policy_id)
+        if policy.current:
+            policy.retired_at = utcnow()
+            audit("policy.retired", policy)
+            db.session.commit()
+            flash(f"Retired {policy.title}. Its acknowledgements are kept.", "success")
+        return redirect(url_for("view_policies"))
+
+    @app.get("/reports/headcount")
+    def view_headcount_report():
+        report, scope = scoped_headcount_report(g.access)
+        largest = max((month.ending for month in report.months), default=0)
+        return render_template("headcount.html", report=report, scope=scope, largest=max(largest, 1))
+
+    @app.get("/reports/headcount.csv")
+    def export_headcount_report():
+        # Same scope as the page: the query is built by one function for both.
+        report, scope = scoped_headcount_report(g.access)
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["month", "starting_headcount", "hires", "leavers", "ending_headcount"])
+        for month in report.months:
+            writer.writerow([month.label, month.starting, month.hires, month.leavers, month.ending])
+        audit("export.headcount_csv", scope=scope["label"], people=scope["people"])
+        db.session.commit()
+        response = make_response(output.getvalue())
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
+        response.headers["Content-Disposition"] = "attachment; filename=peoplebase-headcount.csv"
+        return response
+
+    @app.get("/audit")
+    @admin_only
+    def view_audit():
+        group = request.args.get("group", "").strip()
+        if group not in AUDIT_GROUPS:
+            group = ""
+        search = request.args.get("q", "").strip()[:100]
+        statement = db.select(AuditEvent).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        if group:
+            statement = statement.where(AuditEvent.action.startswith(f"{group}.", autoescape=True))
+        if search:
+            statement = statement.where(
+                db.or_(
+                    AuditEvent.actor_label.icontains(search, autoescape=True),
+                    AuditEvent.subject_label.icontains(search, autoescape=True),
+                )
+            )
+        page = min(max(request.args.get("page", 1, type=int), 1), 10_000)
+        pagination = db.paginate(statement, page=page, per_page=AUDIT_PER_PAGE, error_out=False)
+        return render_template(
+            "audit.html",
+            pagination=pagination,
+            groups=AUDIT_GROUPS,
+            selected_group=group,
+            search=search,
+            page_args={"group": group or None, "q": search or None},
+        )
+
     @app.cli.command("seed-demo")
     def seed_demo_command():
         """Load clearly fake demo data into an empty database."""
+        require_schema()
         if db.session.scalar(db.select(db.func.count(Employee.id))):
             raise click.ClickException(
                 "The database already has employees. seed-demo only fills an empty "
@@ -550,30 +935,453 @@ def create_app(test_config=None):
             f"Added {summary['employees']} demo employees in {summary['departments']} "
             f"departments and {summary['time_off']} time-off requests."
         )
+        click.echo(
+            f"Created {summary['accounts']} demo accounts. They are fake, and they all share "
+            "this password, generated for this run and not stored anywhere else:"
+        )
+        click.echo(f"  password: {summary['password']}")
+        for role, email, name in summary["sign_ins"]:
+            click.echo(f"  {ROLES[role]:<9} {email}  ({name})")
+        click.echo("Every other demo person signs in as <first name>@peoplebase.example.")
 
-    with app.app_context():
-        db.create_all()
-        upgrade_schema()
+    @app.cli.command("create-admin")
+    @click.option("--email", prompt=True, help="Sign-in email for the new HR admin.")
+    @click.password_option(help="At least 12 characters. Prompted for when left out.")
+    def create_admin_command(email, password):
+        """Create an HR admin account, for example the first one on a new install."""
+        require_schema()
+        email = normalize_email(email)
+        if not EMAIL_PATTERN.fullmatch(email) or CONTROL_CHARACTERS.search(email):
+            raise click.ClickException("Enter a valid email address.")
+        if db.session.scalar(db.select(Account).where(Account.email == email)) is not None:
+            raise click.ClickException(f"An account for {email} already exists.")
+        error = password_problem(password, email)
+        if error:
+            raise click.ClickException(error)
+        account = Account(
+            email=email, role="admin", password_hash=hash_password(password), must_change_password=False
+        )
+        db.session.add(account)
+        audit("account.created", account, role="admin", via="create-admin command")
+        db.session.commit()
+        click.echo(f"Created the HR admin account {email}.")
 
     return app
 
 
-def upgrade_schema():
-    """Bring a database created by an older PeopleBase up to the current schema.
+def require_schema():
+    if not schema_ready():
+        raise click.ClickException(
+            "The database has no PeopleBase tables yet. Run: flask --app app db upgrade"
+        )
 
-    New tables come from db.create_all(). This adds the columns that later
-    versions put on the existing employee table. Every added column is nullable
-    or has a default, so existing rows stay valid.
+
+def schema_ready():
+    """True once the migrations have run against the configured database."""
+    return inspect(db.engine).has_table("employee")
+
+
+SUBJECT_TYPES = {
+    Account: "account",
+    Employee: "employee",
+    Department: "department",
+    Policy: "policy",
+    TimeOffRequest: "time off",
+    ChecklistTask: "checklist task",
+}
+
+
+def audit(action, subject=None, label=None, actor=None, **details):
+    """Add one entry to the audit log, in the same transaction as the change
+    it describes: the caller's commit saves both or neither.
+
+    actor defaults to the signed-in account. Outside a request (the CLI) or
+    before sign-in, the entry says so instead.
     """
-    existing = {column["name"] for column in inspect(db.engine).get_columns("employee")}
-    missing = [name for name in EMPLOYEE_UPGRADE_COLUMNS if name not in existing]
-    if not missing:
+    if action not in AUDIT_ACTIONS:
+        raise ValueError(f"Unknown audit action: {action}")
+    if actor is None and has_request_context():
+        actor = g.get("account")
+    if actor is not None:
+        actor_label = actor.email
+    else:
+        actor_label = "not signed in" if has_request_context() else "command line"
+    subject_id = None
+    if subject is not None:
+        if subject.id is None:
+            db.session.flush()
+        subject_id = subject.id
+        label = label or describe_subject(subject)
+    db.session.add(
+        AuditEvent(
+            actor_account_id=actor.id if actor is not None else None,
+            actor_label=actor_label,
+            action=action,
+            subject_type=SUBJECT_TYPES.get(type(subject), ""),
+            subject_id=subject_id,
+            subject_label=(label or "")[:254],
+            details=json.dumps({key: value for key, value in details.items() if value is not None}, default=str),
+        )
+    )
+
+
+def describe_subject(subject):
+    if isinstance(subject, Account):
+        return subject.email
+    if isinstance(subject, (TimeOffRequest, ChecklistTask)):
+        return subject.employee.name
+    if isinstance(subject, Policy):
+        return subject.title
+    return subject.name
+
+
+def scoped_headcount_report(access):
+    """The headcount report for what this account may see: the whole company
+    for HR, their own reporting tree for a manager, and nothing for anyone else."""
+    if not access.can_view_reports():
+        abort(403, description="Reports are for managers and HR admins.")
+    statement = db.select(Employee)
+    if access.is_admin:
+        label = "Whole company"
+    else:
+        statement = statement.where(Employee.id.in_(access.reports))
+        label = "Your reporting tree"
+    people = db.session.scalars(statement).all()
+    report = headcount_report(people, date.today())
+    return report, {"label": label, "people": len(people)}
+
+
+def visible_policy_or_404(policy_id):
+    """Current policies are for everyone. Old versions stay readable for HR."""
+    policy = db.get_or_404(Policy, policy_id)
+    if not policy.current and not g.access.is_admin:
+        abort(404)
+    return policy
+
+
+def acknowledged_policy_ids(employee):
+    """policy id -> when this employee acknowledged it."""
+    if employee is None:
+        return {}
+    rows = db.session.execute(
+        db.select(Acknowledgement.policy_id, Acknowledgement.acknowledged_at).where(
+            Acknowledgement.employee_id == employee.id
+        )
+    )
+    return dict(rows.all())
+
+
+def current_staff_count():
+    return db.session.scalar(db.select(db.func.count(Employee.id)).where(Employee.status != "terminated"))
+
+
+def acknowledgement_count(policy):
+    """How many people currently on staff have acknowledged policy."""
+    return db.session.scalar(
+        db.select(db.func.count(Acknowledgement.id))
+        .join(Employee, Employee.id == Acknowledgement.employee_id)
+        .where(Acknowledgement.policy_id == policy.id, Employee.status != "terminated")
+    )
+
+
+def outstanding_policies(employee):
+    """Current policies this employee has not acknowledged yet."""
+    if employee is None:
+        return []
+    done = acknowledged_policy_ids(employee)
+    policies = db.session.scalars(
+        db.select(Policy).where(Policy.retired_at.is_(None)).order_by(Policy.title, Policy.id)
+    ).all()
+    return [policy for policy in policies if policy.id not in done]
+
+
+def validate_policy(form):
+    title, error = clean_text(form, "title", "Title", max_length=120)
+    if error:
+        return None, error
+    body = form.get("body", "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not body:
+        return None, "Policy text is required."
+    if len(body) > MAX_POLICY_LENGTH:
+        return None, f"Policy text must be {MAX_POLICY_LENGTH:,} characters or fewer."
+    if POLICY_CONTROL_CHARACTERS.search(body):
+        return None, "Policy text cannot contain control characters."
+    return {"title": title, "body": body}, None
+
+
+def employee_snapshot(employee):
+    """The audited fields of an employee as plain text, for before and after."""
+    return {
+        "name": employee.name,
+        "position": employee.position,
+        "salary": str(employee.salary),
+        "department": employee.department.name if employee.department else None,
+        "manager": employee.manager.name if employee.manager else None,
+        "status": employee.status,
+        "start_date": employee.start_date.isoformat() if employee.start_date else None,
+        "last_day": employee.end_date.isoformat() if employee.end_date else None,
+    }
+
+
+def time_off_snapshot(time_off):
+    return {"kind": time_off.kind, "first_day": time_off.start_date, "last_day": time_off.end_date}
+
+
+def format_days(value):
+    """2 decimal places at most, without trailing zeros: 18.33, 1.5, 20."""
+    text = f"{Decimal(value):.2f}".rstrip("0").rstrip(".")
+    return "0" if text in {"", "-0"} else text
+
+
+def admin_only(view):
+    """Limit a route to HR admins. Everyone else gets 403."""
+
+    @wraps(view)
+    def guarded(*args, **kwargs):
+        if not g.access.is_admin:
+            abort(403, description="This page is for HR admins.")
+        return view(*args, **kwargs)
+
+    return guarded
+
+
+def start_session(account):
+    """Begin a fresh session for account. Clearing first drops anything that
+    was in the cookie before sign-in, including its CSRF token."""
+    session.clear()
+    session.permanent = True
+    session["account_id"] = account.id
+    session["nonce"] = account.session_nonce
+    session["auth_at"] = int(time.time())
+
+
+def session_is_current(account):
+    """True when the cookie still matches the account: the account may sign in,
+    its nonce has not been rotated and the session is not too old."""
+    if not may_sign_in(account):
+        return False
+    nonce = str(session.get("nonce", ""))
+    if not hmac.compare_digest(nonce.encode(), account.session_nonce.encode()):
+        return False
+    signed_in_at = session.get("auth_at")
+    if not isinstance(signed_in_at, int):
+        return False
+    return 0 <= time.time() - signed_in_at <= SESSION_LIFETIME.total_seconds()
+
+
+def may_sign_in(account):
+    if account is None or not account.active:
+        return False
+    return account.employee is None or account.employee.status != "terminated"
+
+
+def hash_password(password):
+    return current_app.extensions["password_hasher"].hash(password)
+
+
+def password_matches(account, password):
+    """Check a password in the same time whether or not the account exists."""
+    hasher = current_app.extensions["password_hasher"]
+    stored = account.password_hash if account is not None else current_app.extensions["password_decoy"]
+    try:
+        matched = hasher.verify(stored, password[: PASSWORD_MAX_LENGTH + 1])
+    except (VerificationError, InvalidHashError):
+        matched = False
+    return matched and account is not None and len(password) <= PASSWORD_MAX_LENGTH
+
+
+def upgrade_password_hash(account, password):
+    """Re-hash at sign-in when the stored hash uses older cost settings."""
+    hasher = current_app.extensions["password_hasher"]
+    if hasher.check_needs_rehash(account.password_hash):
+        account.password_hash = hasher.hash(password)
+
+
+def password_problem(password, email):
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return f"Use a password of at least {PASSWORD_MIN_LENGTH} characters."
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return f"Use a password of at most {PASSWORD_MAX_LENGTH} characters."
+    if password.strip().lower() == email:
+        return "Your password cannot be your email address."
+    return None
+
+
+def validate_new_password(form, account):
+    new_password = form.get("new_password", "")
+    error = password_problem(new_password, account.email)
+    if error:
+        return None, error
+    if new_password != form.get("confirm_password", ""):
+        return None, "The two new passwords do not match."
+    if password_matches(account, new_password):
+        return None, "Choose a password you have not just been using."
+    return new_password, None
+
+
+def new_temporary_password():
+    return secrets.token_urlsafe(12)
+
+
+def normalize_email(value):
+    return value.strip().lower()[:254]
+
+
+def safe_next(target):
+    """A local path to return to after sign-in, or None. Anything that could
+    leave the site (a scheme, a host, a protocol-relative //) is dropped."""
+    if not target or not target.startswith("/") or target.startswith("//"):
+        return None
+    if "\\" in target or CONTROL_CHARACTERS.search(target):
+        return None
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return None
+    return target
+
+
+def throttle_locked(key, now):
+    row = db.session.get(LoginThrottle, key)
+    return row is not None and row.locked_until is not None and row.locked_until > now
+
+
+def record_failed_login(key, limit, now):
+    """Count a failure for key and lock it once limit is reached in one window."""
+    db.session.execute(
+        db.delete(LoginThrottle).where(LoginThrottle.window_started_at < now - timedelta(days=1))
+    )
+    row = db.session.get(LoginThrottle, key)
+    if row is None:
+        row = LoginThrottle(key=key, failures=0, window_started_at=now)
+        db.session.add(row)
+    elif now - row.window_started_at > LOGIN_WINDOW:
+        row.failures = 0
+        row.window_started_at = now
+        row.locked_until = None
+    row.failures += 1
+    if row.failures >= limit:
+        row.locked_until = now + LOGIN_LOCK
+
+
+def clear_throttle(key):
+    row = db.session.get(LoginThrottle, key)
+    if row is not None:
+        db.session.delete(row)
+
+
+def close_account(employee, unlink):
+    """Stop the sign-in of someone who has left or whose record is going away."""
+    account = employee.account
+    if account is None:
         return
-    with db.engine.begin() as connection:
-        for name in missing:
-            connection.execute(
-                text(f"ALTER TABLE employee ADD COLUMN {name} {EMPLOYEE_UPGRADE_COLUMNS[name]}")
+    account.active = False
+    account.end_sessions()
+    if unlink:
+        account.employee = None
+
+
+def render_accounts(values, issued=None):
+    accounts = db.session.scalars(db.select(Account).order_by(Account.email)).all()
+    linkable = db.session.scalars(
+        db.select(Employee)
+        .where(Employee.status != "terminated", ~Employee.account.has())
+        .order_by(Employee.name, Employee.id)
+    ).all()
+    now = utcnow()
+    locked = {account.id for account in accounts if throttle_locked(f"email:{account.email}", now)}
+    return render_template(
+        "accounts.html", accounts=accounts, employees=linkable, values=values, issued=issued, locked=locked
+    )
+
+
+def validate_account(form):
+    email = normalize_email(form.get("email", ""))
+    if not EMAIL_PATTERN.fullmatch(email) or CONTROL_CHARACTERS.search(email):
+        return None, "Enter a valid email address."
+    if db.session.scalar(db.select(Account).where(Account.email == email)) is not None:
+        return None, f"An account for {email} already exists."
+    role = form.get("role", "").strip()
+    if role not in ROLES:
+        return None, "Choose a valid role."
+    employee, error = parse_id(form.get("employee_id"), Employee, "employee")
+    if error:
+        return None, error
+    if employee is None and role != "admin":
+        return None, "Employee and manager accounts must be linked to an employee record."
+    if employee is not None:
+        if employee.status == "terminated":
+            return None, f"{employee.name} no longer works here."
+        if employee.account is not None:
+            return None, f"{employee.name} already has an account."
+    return {"email": email, "role": role, "employee": employee}, None
+
+
+def apply_role_change(account, role, actor):
+    """Change an account's role. Nobody changes their own, so the admin making
+    the change stays an admin and there is always at least one."""
+    if role not in ROLES:
+        return "Choose a valid role."
+    if account.id == actor.id:
+        return "You cannot change your own role. Ask another HR admin."
+    if role != "admin" and account.employee is None:
+        return "Link the account to an employee record before making it an employee or manager account."
+    if role != account.role:
+        account.role = role
+        account.end_sessions()
+    return None
+
+
+def apply_active_change(account, active, actor):
+    if account.id == actor.id:
+        return "You cannot turn off your own account. Ask another HR admin."
+    if active and account.employee is not None and account.employee.status == "terminated":
+        return f"{account.employee.name} has left, so their account stays off."
+    account.active = active
+    if not active:
+        account.end_sessions()
+    return None
+
+
+def render_personal_home(today):
+    """The dashboard for employees and managers: their own time off, and for
+    managers the requests waiting on them and who on their team is out."""
+    employee = g.account.employee
+    own_requests = []
+    if employee is not None:
+        own_requests = db.session.scalars(
+            db.select(TimeOffRequest)
+            .where(TimeOffRequest.employee_id == employee.id, TimeOffRequest.end_date >= today)
+            .order_by(TimeOffRequest.start_date)
+        ).all()
+    waiting = []
+    team_out = []
+    reports = g.access.reports
+    if reports:
+        waiting = db.session.scalars(
+            db.select(TimeOffRequest)
+            .where(TimeOffRequest.status == "pending", TimeOffRequest.employee_id.in_(reports))
+            .order_by(TimeOffRequest.start_date)
+        ).all()
+        team_out = db.session.scalars(
+            db.select(TimeOffRequest)
+            .where(
+                TimeOffRequest.status == "approved",
+                TimeOffRequest.employee_id.in_(reports),
+                TimeOffRequest.start_date <= today,
+                TimeOffRequest.end_date >= today,
             )
+            .order_by(TimeOffRequest.end_date)
+        ).all()
+    return render_template(
+        "home_personal.html",
+        employee=employee,
+        own_requests=own_requests,
+        waiting=waiting,
+        team_out=team_out,
+        report_count=len(reports),
+        policies=outstanding_policies(employee),
+        today=today,
+    )
 
 
 def get_csrf_token():
@@ -689,6 +1497,9 @@ def validate_employment(form, employee=None):
     start_date, error = parse_date(form.get("start_date"), "Start date")
     if error:
         return None, error
+    end_date, error = parse_date(form.get("end_date"), "Last day")
+    if error:
+        return None, error
 
     department, error = parse_id(form.get("department_id"), Department, "department")
     if error:
@@ -720,6 +1531,16 @@ def validate_employment(form, employee=None):
         for field, form_key in optional_fields:
             if form_key not in form:
                 values[field] = getattr(employee, field)
+
+    # A last day belongs only to someone who has left. It defaults to today, or
+    # to the day already on record when the form does not send one.
+    if status == "terminated":
+        recorded = employee.end_date if employee is not None and employee.status == "terminated" else None
+        values["end_date"] = end_date or recorded or date.today()
+        if values["start_date"] and values["end_date"] < values["start_date"]:
+            return None, "The last day cannot be before the start date."
+    else:
+        values["end_date"] = None
     return values, None
 
 
@@ -754,20 +1575,30 @@ def validate_compensation_change(form, employee, values):
 
 
 def render_time_off_form(values):
-    employees = db.session.scalars(
-        db.select(Employee)
-        .where(Employee.status != "terminated")
-        .order_by(Employee.name, Employee.id)
-    ).all()
-    return render_template("request_time_off.html", employees=employees, values=values)
+    """HR picks who the request is for. Everyone else requests for themselves."""
+    employees = []
+    if g.access.is_admin:
+        employees = db.session.scalars(
+            db.select(Employee)
+            .where(Employee.status != "terminated")
+            .order_by(Employee.name, Employee.id)
+        ).all()
+    return render_template("request_time_off.html", employees=employees, values=values, today=date.today())
 
 
-def validate_time_off(form):
-    employee, error = parse_id(form.get("employee_id"), Employee, "employee")
-    if error:
-        return None, error
-    if employee is None:
-        return None, "Choose who the time off is for."
+def validate_time_off(form, access):
+    if access.is_admin:
+        employee, error = parse_id(form.get("employee_id"), Employee, "employee")
+        if error:
+            return None, error
+        if employee is None:
+            return None, "Choose who the time off is for."
+    else:
+        # Never read employee_id from the form here: the request is always for
+        # the signed-in person, whatever the browser sends.
+        employee = access.account.employee
+        if employee is None:
+            return None, "Your account is not linked to an employee record. Ask HR to link it."
     if employee.status == "terminated":
         return None, f"{employee.name} no longer works here."
 
@@ -809,34 +1640,25 @@ def validate_time_off(form):
     ), None
 
 
-def apply_time_off_decision(time_off, form):
+def apply_time_off_decision(time_off, form, access):
     """Approve or deny a pending request. Returns an error message or None.
 
-    PeopleBase has no login, so the approver is named on the form and checked
-    against the reporting line: the requester's manager decides, or for someone
-    with no manager, any other current employee. Nobody decides their own request.
+    The decider is the signed-in account, never a form field. HR decides for
+    anyone and a manager for their direct and indirect reports. Nobody decides
+    their own request.
     """
     decision = TIME_OFF_DECISIONS.get(form.get("decision", "").strip())
     if decision is None:
         return "Choose approve or deny."
     if time_off.status != "pending":
         return f"This request was already {time_off.status_label.lower()}."
-
-    approver, error = parse_id(form.get("approver_id"), Employee, "approver")
-    if error:
-        return error
-    if approver is None:
-        return "Choose who is making this decision."
-    if approver.id == time_off.employee_id:
+    if access.is_self(time_off.employee):
         return "People cannot decide their own time off."
-    if approver not in time_off.approver_choices():
-        manager = time_off.employee.manager
-        if manager is not None and manager.status != "terminated":
-            return f"Only {manager.name}, {time_off.employee.name}'s manager, can decide this request."
-        return f"{approver.name} cannot decide this request."
+    if not access.can_decide_time_off(time_off):
+        return f"Only {time_off.employee.name}'s managers or HR can decide this request."
 
     time_off.status = decision
-    time_off.decided_by = approver
+    time_off.decided_by = access.account.employee
     time_off.decided_at = utcnow()
     return None
 
@@ -870,15 +1692,26 @@ def department_headcounts():
     return [{"department": department, "headcount": count} for department, count in rows]
 
 
-def directory_criteria(args):
+def directory_criteria(args, access):
     status = args.get("status", "").strip()
     department = args.get("department", "").strip()
     return {
         "search": args.get("q", "").strip(),
         "position": args.get("position", "").strip(),
         "department": department if is_small_id(department) else "",
-        "status": status if status in EMPLOYMENT_STATUSES else "",
+        # Status is HR-only, so for everyone else the filter does not exist.
+        "status": status if access.is_admin and status in EMPLOYMENT_STATUSES else "",
     }
+
+
+def directory_filters(criteria, access):
+    """The SQL filters for a directory query. The page, its totals and the CSV
+    export all use this, so they always describe the same people. Only HR sees
+    people who have left."""
+    filters = employee_filters(**criteria)
+    if not access.is_admin:
+        filters.append(Employee.status != "terminated")
+    return filters
 
 
 def employee_filters(search="", position="", department="", status=""):
@@ -929,10 +1762,30 @@ DEMO_STAFF = [
     ("Drew Example", "Operations Manager", "Operations", "Morgan Example", "118000", (3, 120), "active"),
     ("Skyler Example", "Support Specialist", "Operations", "Drew Example", "68000", (0, 75), "active"),
     ("Harper Example", "Finance Manager", "Finance", "Morgan Example", "134000", (7, 28), "active"),
-    ("Rowan Example", "Accountant", "Finance", "Harper Example", "86000", (2, 160), "active"),
+    ("Rowan Example", "Accountant", "Finance", "Harper Example", "86000", (0, 215), "active"),
     ("Emerson Example", "People Partner", "People", "Morgan Example", "104000", (3, -1), "active"),
     ("Parker Example", "Recruiter", "People", "Emerson Example", "79000", (4, 300), "terminated"),
 ]
+
+
+DEMO_POLICIES = [
+    (
+        "Code of conduct",
+        "This is demo text, not a real policy.\n\nTreat colleagues with respect. Raise concerns with your "
+        "manager or with the People team. Keep company and customer information confidential.",
+        set(),
+    ),
+    (
+        "Remote work and equipment",
+        "This is demo text, not a real policy.\n\nWork from anywhere your manager agrees to. Lock your "
+        "laptop when you step away, and report lost equipment to the People team the same day.",
+        {"Casey Example", "Skyler Example", "Riley Example"},
+    ),
+]
+
+# The People Partner is the HR admin. Anyone with reports gets the manager role.
+DEMO_ADMIN = "Emerson Example"
+DEMO_SIGN_INS = [("admin", "Emerson Example"), ("manager", "Riley Example"), ("employee", "Casey Example")]
 
 
 def seed_demo_data(today):
@@ -956,6 +1809,24 @@ def seed_demo_data(today):
         )
         people[name] = employee
         db.session.add(employee)
+
+    # Skyler is the newest hire and still onboarding; Parker left and is mostly offboarded.
+    now = utcnow()
+    for name, kind, finished in (("Skyler Example", "onboarding", 3), ("Parker Example", "offboarding", 4)):
+        people[name].start_checklist(kind)
+        for task in people[name].checklist(kind)[:finished]:
+            task.completed_at = now
+            task.completed_by = demo_email(DEMO_ADMIN)
+    people["Parker Example"].end_date = today - timedelta(days=45)
+
+    # Two short made-up policies. Everyone has read the first; three people still owe the second.
+    current = [employee for employee in people.values() if employee.status != "terminated"]
+    for title, body, waiting in DEMO_POLICIES:
+        policy = Policy(title=title, body=body, published_by=demo_email(DEMO_ADMIN))
+        db.session.add(policy)
+        for employee in current:
+            if employee.name not in waiting:
+                policy.acknowledgements.append(Acknowledgement(employee=employee))
 
     raise_on = anniversary_on(today, today.year - 1)
     jordan = people["Jordan Example"]
@@ -986,8 +1857,39 @@ def seed_demo_data(today):
                 decided_at=utcnow() if approver else None,
             )
         )
+    # One account per current demo person. The domain is reserved for examples
+    # and the password is random per run, so nothing here works anywhere else.
+    password = new_temporary_password()
+    password_hash = hash_password(password)
+    managers = {manager for _, _, _, manager, _, _, _ in DEMO_STAFF if manager}
+    accounts = 0
+    for name, employee in people.items():
+        if employee.status == "terminated":
+            continue
+        role = "admin" if name == DEMO_ADMIN else ("manager" if name in managers else "employee")
+        db.session.add(
+            Account(
+                email=demo_email(name),
+                role=role,
+                employee=employee,
+                password_hash=password_hash,
+                must_change_password=False,
+            )
+        )
+        accounts += 1
     db.session.commit()
-    return {"employees": len(people), "departments": len(departments), "time_off": len(requests)}
+    return {
+        "employees": len(people),
+        "departments": len(departments),
+        "time_off": len(requests),
+        "accounts": accounts,
+        "password": password,
+        "sign_ins": [(role, demo_email(name), name) for role, name in DEMO_SIGN_INS],
+    }
+
+
+def demo_email(name):
+    return f"{name.split()[0].lower()}@peoplebase.example"
 
 
 def headcount_by_department(employees):

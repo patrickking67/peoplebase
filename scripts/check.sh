@@ -15,4 +15,5 @@ pytest -q
 echo "==> repository checks"
 python scripts/check-ai-config.py
 python scripts/check-text.py
+python scripts/check-docs.py
 echo "==> all checks passed"

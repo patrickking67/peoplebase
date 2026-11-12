@@ -2,11 +2,17 @@
 {% block title %}Request time off | PeopleBase{% endblock %}
 {% block content %}
 <section class="form-layout">
-    <header><h1>Request time off.</h1><p>The request waits for the person's manager to approve or deny it. Dates are inclusive, up to 60 days per request.</p></header>
+    <header class="form-aside"><h1>Request time off.</h1><p>{% if access.is_admin %}Record time off for anyone. It{% else %}Your request{% endif %} waits for a manager or HR to approve or deny it. Dates are inclusive, up to 60 days per request.</p>
+        {% if current_account.employee and not access.is_admin %}
+        <h2>Your leave, {{ today.year }}</h2>
+        {% with person = current_account.employee %}{% include '_leave_balances.html' %}{% endwith %}
+        {% endif %}
+    </header>
     <form method="post" action="{{ url_for('request_time_off') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <fieldset>
             <legend>Request</legend>
+            {% if access.is_admin %}
             <label for="employee_id">Who is taking time off</label>
             <select name="employee_id" id="employee_id" required>
                 <option value="">Choose a person</option>
@@ -14,6 +20,7 @@
                 <option value="{{ employee.id }}"{% if values.get('employee_id') == employee.id|string %} selected{% endif %}>{{ employee.name }}</option>
                 {% endfor %}
             </select>
+            {% endif %}
             <label for="kind">Type</label>
             <select name="kind" id="kind" required>
                 {% for key, label in TIME_OFF_KINDS.items() %}

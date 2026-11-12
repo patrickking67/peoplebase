@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Onboarding and offboarding | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Onboarding and offboarding</h1><p class="lede">{% if access.is_admin %}Everyone with a checklist still open.{% else %}People on your team with a checklist still open.{% endif %} A new hire gets the onboarding list; marking someone as left starts the offboarding list.</p></div>
+</section>
+{% if rows %}
+<ul class="request-list">
+    {% for row in rows %}
+    {% set done, total, progress = checklist_progress(row.tasks) %}
+    <li class="request request-pending">
+        <div class="request-main">
+            <p class="request-who"><a href="{{ url_for('employee_profile', employee_id=row.employee.id) }}">{{ row.employee.name }}</a> <span class="status status-pending">{{ CHECKLIST_KINDS[row.kind] }}: {{ done }} of {{ total }}</span></p>
+            <p class="request-when">{{ row.employee.position }}{% if row.kind == 'onboarding' and row.employee.start_date %}, started <time datetime="{{ row.employee.start_date.isoformat() }}">{{ row.employee.start_date.isoformat() }}</time>{% elif row.kind == 'offboarding' and row.employee.end_date %}, last day <time datetime="{{ row.employee.end_date.isoformat() }}">{{ row.employee.end_date.isoformat() }}</time>{% endif %}</p>
+            <ul class="checklist checklist-compact">
+                {% for task in row.tasks if not task.done %}
+                <li class="task-open">
+                    <span class="task-mark" aria-hidden="true"></span>
+                    <span class="task-title">{{ task.title }}</span>
+                    <form method="post" action="{{ url_for('update_checklist_task', task_id=task.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="done" value="1">
+                        <input type="hidden" name="next" value="{{ url_for('view_checklists') }}">
+                        <button class="link-button" type="submit">Mark done<span class="visually-hidden">: {{ task.title }} for {{ row.employee.name }}</span></button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<section class="empty-state"><h2>Nothing open.</h2><p>Every onboarding and offboarding checklist is complete.</p></section>
+{% endif %}
+{% endblock %}

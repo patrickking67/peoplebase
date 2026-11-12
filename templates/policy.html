@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}{{ policy.title }} | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div>
+        <h1>{{ policy.title }}</h1>
+        <p class="lede">Published <time datetime="{{ policy.published_at.strftime('%Y-%m-%d') }}">{{ policy.published_at.strftime('%Y-%m-%d') }}</time>{% if access.is_admin %} by {{ policy.published_by }}{% endif %}.{% if not policy.current %} This version has been replaced or retired.{% endif %}</p>
+    </div>
+    {% if access.is_admin and policy.current %}
+    <div class="heading-actions">
+        <a class="button button-quiet" href="{{ url_for('revise_policy', policy_id=policy.id) }}">Revise</a>
+        <form method="post" action="{{ url_for('retire_policy', policy_id=policy.id) }}" data-confirm="Retire {{ policy.title }}? Nobody will be asked to acknowledge it any more.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="button button-quiet button-danger" type="submit">Retire</button>
+        </form>
+    </div>
+    {% endif %}
+</section>
+<div class="split">
+    <article class="panel policy-text" aria-label="Policy text">{{ policy.body }}</article>
+    <div class="stack">
+        <section class="panel" aria-labelledby="ack-title">
+            <h2 id="ack-title">Your acknowledgement</h2>
+            {% if acknowledged_at %}
+            <p><span class="status status-approved">Acknowledged</span></p>
+            <p class="quiet hint">You confirmed on {{ acknowledged_at.strftime('%Y-%m-%d') }} that you read this version.</p>
+            {% elif not employee %}
+            <p class="quiet">Your account has no employee record, so there is nothing for you to sign.</p>
+            {% elif policy.current %}
+            <p>Confirm that you have read this policy. It is recorded against your own record with today's date.</p>
+            <form class="stacked-form" method="post" action="{{ url_for('acknowledge_policy', policy_id=policy.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-actions"><button class="button" type="submit">I have read this policy</button></div>
+            </form>
+            {% else %}
+            <p class="quiet">You did not acknowledge this version before it was replaced.</p>
+            {% endif %}
+        </section>
+        {% if progress is not none %}
+        <section class="panel" aria-labelledby="progress-title">
+            {% set done = progress|selectattr(1)|list|length %}
+            <h2 id="progress-title">{{ done }} of {{ progress|length }} on staff have acknowledged</h2>
+            <ul class="plain-list">
+                {% for person, when in progress %}
+                <li><a href="{{ url_for('employee_profile', employee_id=person.id) }}">{{ person.name }}</a>{% if when %}<span>{{ when.strftime('%Y-%m-%d') }}</span>{% else %}<span class="status status-pending">Waiting</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
