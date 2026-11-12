@@ -19,6 +19,7 @@
             <p class="request-who"><a href="{{ url_for('employee_profile', employee_id=item.employee.id) }}">{{ item.employee.name }}</a> <span class="status status-{{ item.status }}">{{ item.status_label }}</span></p>
             <p class="request-when">{{ item.kind_label }}, <time datetime="{{ item.start_date.isoformat() }}">{{ item.start_date.isoformat() }}</time>{% if item.days > 1 %} to <time datetime="{{ item.end_date.isoformat() }}">{{ item.end_date.isoformat() }}</time>{% endif %} <span class="quiet">({{ item.days }} {{ "day" if item.days == 1 else "days" }})</span></p>
             {% if item.note %}<p class="request-note">{{ item.note }}</p>{% endif %}
+            {% if item.status == 'pending' %}{% set short = item.shortfall(today) %}{% if short %}<p class="request-short">{{ short|days }} working {{ "day" if short == 1 else "days" }} more {{ item.kind_label|lower }} than {{ item.employee.name.split()[0] }} will have accrued by then.</p>{% endif %}{% endif %}
             {% if item.status != 'pending' %}<p class="quiet">{{ item.status_label }}{% if item.decided_by %} by {{ item.decided_by.name }}{% endif %}.</p>{% endif %}
         </div>
         {% if item.status == 'pending' and access.can_decide_time_off(item) %}

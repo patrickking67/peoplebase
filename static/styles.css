@@ -684,3 +684,12 @@ textarea {
     resize: vertical;
 }
 textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+
+/* Leave balances */
+
+.balance-table th[scope="row"] { color: var(--ink); font-size: inherit; padding-left: 0; }
+.balance-table td:last-child strong { font-size: var(--step-1); }
+.balance-short strong { color: var(--danger); }
+.request-short { color: var(--ink); font-size: var(--step--1); padding-left: 10px; border-left: 3px solid var(--marigold); }
+.form-aside h2 { margin-top: 28px; margin-bottom: 8px; }
+.form-aside .hint { margin-top: 10px; }

@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
 
+from leave import leave_balances, request_shortfall, workdays
+
 db = SQLAlchemy()
 
 EMPLOYMENT_STATUSES = {
@@ -99,6 +101,10 @@ class Employee(db.Model):
     @property
     def status_label(self):
         return EMPLOYMENT_STATUSES.get(self.status, self.status)
+
+    def leave_balances(self, today):
+        """This year's balance for each kind of leave, as of today."""
+        return leave_balances(today.year, today, self.start_date, self.time_off_requests)
 
     def checklist(self, kind):
         return [task for task in self.checklist_tasks if task.kind == kind]
@@ -221,6 +227,15 @@ class TimeOffRequest(db.Model):
     def days(self):
         """Calendar days covered, counting both the first and last day."""
         return (self.end_date - self.start_date).days + 1
+
+    @property
+    def workdays(self):
+        """Monday-to-Friday days covered. Leave balances count these."""
+        return workdays(self.start_date, self.end_date)
+
+    def shortfall(self, today):
+        """Working days this request runs past the leave accrued by its first day."""
+        return request_shortfall(self, today, self.employee.start_date, self.employee.time_off_requests)
 
     @property
     def kind_label(self):

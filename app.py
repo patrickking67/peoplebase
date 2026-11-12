@@ -154,6 +154,7 @@ def create_app(test_config=None):
     app.jinja_env.globals["csrf_token"] = get_csrf_token
     app.jinja_env.globals["ROLES"] = ROLES
     app.jinja_env.globals["CHECKLIST_KINDS"] = CHECKLIST_KINDS
+    app.jinja_env.filters["days"] = format_days
     app.jinja_env.globals["checklist_progress"] = checklist_progress
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
     app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
@@ -677,6 +678,7 @@ def create_app(test_config=None):
             "time_off.html",
             requests=db.session.scalars(statement).all(),
             selected_status=status,
+            today=date.today(),
         )
 
     @app.route("/time-off/new", methods=["GET", "POST"])
@@ -694,6 +696,14 @@ def create_app(test_config=None):
                 f"off for {time_off.employee.name}.",
                 "success",
             )
+            short = time_off.shortfall(date.today())
+            if short:
+                # Not refused: going past the balance is the approver's call.
+                flash(
+                    f"This is {format_days(short)} working {'day' if short == 1 else 'days'} more "
+                    f"{time_off.kind_label.lower()} than will have accrued by then. The approver will see that.",
+                    "info",
+                )
             return redirect(url_for("view_time_off"))
         values = {}
         employee_id = request.args.get("employee", "")
@@ -1076,6 +1086,12 @@ def employee_snapshot(employee):
 
 def time_off_snapshot(time_off):
     return {"kind": time_off.kind, "first_day": time_off.start_date, "last_day": time_off.end_date}
+
+
+def format_days(value):
+    """2 decimal places at most, without trailing zeros: 18.33, 1.5, 20."""
+    text = f"{Decimal(value):.2f}".rstrip("0").rstrip(".")
+    return "0" if text in {"", "-0"} else text
 
 
 def admin_only(view):
@@ -1528,7 +1544,7 @@ def render_time_off_form(values):
             .where(Employee.status != "terminated")
             .order_by(Employee.name, Employee.id)
         ).all()
-    return render_template("request_time_off.html", employees=employees, values=values)
+    return render_template("request_time_off.html", employees=employees, values=values, today=date.today())
 
 
 def validate_time_off(form, access):

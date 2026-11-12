@@ -99,6 +99,13 @@
     </section>
     {% endif %}
 
+    {% if employee.status != 'terminated' %}
+    <section class="panel panel-wide" aria-labelledby="balances-title">
+        <h2 id="balances-title">Leave balances, {{ today.year }}</h2>
+        {% with person = employee %}{% include '_leave_balances.html' %}{% endwith %}
+    </section>
+    {% endif %}
+
     <section class="panel panel-wide" aria-labelledby="time-off-title">
         <div class="panel-heading">
             <h2 id="time-off-title">Time off</h2>
