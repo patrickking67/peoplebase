@@ -58,6 +58,7 @@ from models import (
     db,
     utcnow,
 )
+from reports import headcount_report
 
 MAX_SALARY = Decimal("999999999.99")
 DEFAULT_PER_PAGE = 25
@@ -870,6 +871,28 @@ def create_app(test_config=None):
             flash(f"Retired {policy.title}. Its acknowledgements are kept.", "success")
         return redirect(url_for("view_policies"))
 
+    @app.get("/reports/headcount")
+    def view_headcount_report():
+        report, scope = scoped_headcount_report(g.access)
+        largest = max((month.ending for month in report.months), default=0)
+        return render_template("headcount.html", report=report, scope=scope, largest=max(largest, 1))
+
+    @app.get("/reports/headcount.csv")
+    def export_headcount_report():
+        # Same scope as the page: the query is built by one function for both.
+        report, scope = scoped_headcount_report(g.access)
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["month", "starting_headcount", "hires", "leavers", "ending_headcount"])
+        for month in report.months:
+            writer.writerow([month.label, month.starting, month.hires, month.leavers, month.ending])
+        audit("export.headcount_csv", scope=scope["label"], people=scope["people"])
+        db.session.commit()
+        response = make_response(output.getvalue())
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
+        response.headers["Content-Disposition"] = "attachment; filename=peoplebase-headcount.csv"
+        return response
+
     @app.get("/audit")
     @admin_only
     def view_audit():
@@ -1010,6 +1033,22 @@ def describe_subject(subject):
     if isinstance(subject, Policy):
         return subject.title
     return subject.name
+
+
+def scoped_headcount_report(access):
+    """The headcount report for what this account may see: the whole company
+    for HR, their own reporting tree for a manager, and nothing for anyone else."""
+    if not access.can_view_reports():
+        abort(403, description="Reports are for managers and HR admins.")
+    statement = db.select(Employee)
+    if access.is_admin:
+        label = "Whole company"
+    else:
+        statement = statement.where(Employee.id.in_(access.reports))
+        label = "Your reporting tree"
+    people = db.session.scalars(statement).all()
+    report = headcount_report(people, date.today())
+    return report, {"label": label, "people": len(people)}
 
 
 def visible_policy_or_404(policy_id):

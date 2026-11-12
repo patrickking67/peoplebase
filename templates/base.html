@@ -21,6 +21,7 @@
         ('view_time_off', 'Time off', ['view_time_off', 'request_time_off'], true),
         ('view_policies', 'Policies', ['view_policies', 'view_policy', 'add_policy', 'revise_policy'], true),
         ('view_checklists', 'Onboarding', ['view_checklists'], access.is_admin or access.is_manager),
+        ('view_headcount_report', 'Reports', ['view_headcount_report'], access.can_view_reports()),
         ('view_departments', 'Departments', ['view_departments', 'add_department'], access.is_admin),
         ('view_accounts', 'Accounts', ['view_accounts', 'add_account'], access.is_admin),
         ('view_audit', 'Audit log', ['view_audit'], access.is_admin),

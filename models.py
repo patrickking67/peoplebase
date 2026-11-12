@@ -325,6 +325,7 @@ AUDIT_ACTIONS = {
     "policy.retired": "Retired policy",
     "policy.acknowledged": "Acknowledged policy",
     "export.directory_csv": "Exported directory CSV",
+    "export.headcount_csv": "Exported headcount report CSV",
 }
 AUDIT_GROUPS = {
     "auth": "Sign-in",

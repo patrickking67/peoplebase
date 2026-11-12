@@ -62,6 +62,8 @@ ROUTES = {
     "reset_account_password": ("POST", "/accounts/1/password", 302, 403, 403, 302),
     "view_audit": ("GET", "/audit", 302, 403, 403, 200),
     "view_checklists": ("GET", "/checklists", 302, 403, 200, 200),
+    "view_headcount_report": ("GET", "/reports/headcount", 302, 403, 200, 200),
+    "export_headcount_report": ("GET", "/reports/headcount.csv", 302, 403, 200, 200),
     "view_policies": ("GET", "/policies", 302, 200, 200, 200),
     "add_policy": ("GET", "/policies/new", 302, 403, 403, 200),
     "view_policy": ("GET", "/policies/999", 302, 404, 404, 404),

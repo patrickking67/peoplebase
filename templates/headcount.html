@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Headcount and attrition | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div>
+        <h1>Headcount and attrition</h1>
+        <p class="lede">{{ scope.label }}, last 12 months. {% if access.is_admin %}Everyone with a record.{% else %}The people who report up to you, directly or through others.{% endif %}</p>
+    </div>
+    <div class="heading-actions"><a class="button button-quiet" href="{{ url_for('export_headcount_report') }}">Download as CSV</a></div>
+</section>
+<section class="panel report-summary" aria-label="Summary">
+    <dl class="facts facts-row facts-four">
+        <div><dt>On staff today</dt><dd class="num">{{ report.headcount }}</dd></div>
+        <div><dt>Hires</dt><dd class="num">{{ report.hires }}</dd></div>
+        <div><dt>Leavers</dt><dd class="num">{{ report.leavers }}</dd></div>
+        <div><dt>Attrition</dt><dd class="num">{% if report.attrition_rate is none %}n/a{% else %}{{ report.attrition_rate }}%{% endif %}</dd></div>
+    </dl>
+    <p class="quiet hint">Attrition is leavers divided by average headcount ({{ "%.1f"|format(report.average_headcount) }}) over the period.{% if report.undated_leavers %} {{ report.undated_leavers }} {{ "person is" if report.undated_leavers == 1 else "people are" }} marked as left with no last day on record and {{ "is" if report.undated_leavers == 1 else "are" }} not counted.{% endif %}</p>
+</section>
+<div class="split report-split">
+    <section class="panel" aria-labelledby="months-title">
+        <h2 id="months-title">Month by month</h2>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">Month</th><th scope="col" class="num">Start</th><th scope="col" class="num">Hires</th><th scope="col" class="num">Leavers</th><th scope="col" class="num">End</th><th scope="col"><span class="visually-hidden">Headcount at month end, as a bar</span></th></tr></thead>
+                <tbody>
+                    {% for month in report.months %}
+                    <tr>
+                        <th scope="row" class="num"><time datetime="{{ month.label }}">{{ month.label }}</time></th>
+                        <td class="num">{{ month.starting }}</td>
+                        <td class="num">{{ month.hires or "" }}</td>
+                        <td class="num">{{ month.leavers or "" }}</td>
+                        <td class="num"><strong>{{ month.ending }}</strong></td>
+                        <td class="bar-cell"><meter min="0" max="{{ largest }}" value="{{ month.ending }}" aria-hidden="true">{{ month.ending }}</meter></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="panel" aria-labelledby="by-department-title">
+        <h2 id="by-department-title">By department</h2>
+        {% if report.departments %}
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">Department</th><th scope="col" class="num">Now</th><th scope="col" class="num">Hires</th><th scope="col" class="num">Leavers</th></tr></thead>
+                <tbody>
+                    {% for name, current, hires, leavers in report.departments %}
+                    <tr><th scope="row">{{ name }}</th><td class="num">{{ current }}</td><td class="num">{{ hires or "" }}</td><td class="num">{{ leavers or "" }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="quiet">Nobody in this view yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
