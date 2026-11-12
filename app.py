@@ -45,12 +45,14 @@ from models import (
     TIME_OFF_KINDS,
     TIME_OFF_STATUSES,
     Account,
+    Acknowledgement,
     AuditEvent,
     ChecklistTask,
     CompensationChange,
     Department,
     Employee,
     LoginThrottle,
+    Policy,
     TimeOffRequest,
     checklist_progress,
     db,
@@ -86,6 +88,9 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
 MAX_TIME_OFF_DAYS = 60
+MAX_POLICY_LENGTH = 20_000
+# Policy text keeps its line breaks, so only the other control characters are refused.
+POLICY_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Sign-in. See docs/security.md for the reasoning behind each number.
 SESSION_LIFETIME = timedelta(hours=12)
@@ -386,6 +391,7 @@ def create_app(test_config=None):
             anniversaries=upcoming_anniversaries(current, today),
             out_today=out_today,
             pending_count=pending_count,
+            policies=outstanding_policies(g.account.employee),
             today=today,
         )
 
@@ -754,6 +760,106 @@ def create_app(test_config=None):
         back = safe_next(request.form.get("next"))
         return redirect(back or url_for("employee_profile", employee_id=task.employee_id))
 
+    @app.get("/policies")
+    def view_policies():
+        policies = db.session.scalars(
+            db.select(Policy).where(Policy.retired_at.is_(None)).order_by(Policy.title, Policy.id)
+        ).all()
+        own = acknowledged_policy_ids(g.account.employee)
+        staff_count = current_staff_count()
+        rows = [
+            {
+                "policy": policy,
+                "acknowledged_at": own.get(policy.id),
+                # Company-wide progress is for HR only.
+                "done": acknowledgement_count(policy) if g.access.is_admin else None,
+            }
+            for policy in policies
+        ]
+        return render_template("policies.html", rows=rows, staff_count=staff_count)
+
+    @app.route("/policies/new", methods=["GET", "POST"])
+    @admin_only
+    def add_policy():
+        if request.method == "POST":
+            values, error = validate_policy(request.form)
+            if error:
+                flash(error, "error")
+                return render_template("policy_form.html", policy=None, values=request.form), 400
+            policy = Policy(**values, published_by=g.account.email)
+            db.session.add(policy)
+            audit("policy.published", policy)
+            db.session.commit()
+            flash(f"Published {policy.title}. Everyone on staff is asked to acknowledge it.", "success")
+            return redirect(url_for("view_policy", policy_id=policy.id))
+        return render_template("policy_form.html", policy=None, values={})
+
+    @app.get("/policies/<int:policy_id>")
+    def view_policy(policy_id):
+        policy = visible_policy_or_404(policy_id)
+        employee = g.account.employee
+        acknowledged_at = acknowledged_policy_ids(employee).get(policy.id)
+        progress = None
+        if g.access.is_admin:
+            staff = db.session.scalars(
+                db.select(Employee).where(Employee.status != "terminated").order_by(Employee.name, Employee.id)
+            ).all()
+            when = {item.employee_id: item.acknowledged_at for item in policy.acknowledgements}
+            progress = [(person, when.get(person.id)) for person in staff]
+        return render_template(
+            "policy.html", policy=policy, employee=employee, acknowledged_at=acknowledged_at, progress=progress
+        )
+
+    @app.post("/policies/<int:policy_id>/acknowledge")
+    def acknowledge_policy(policy_id):
+        policy = visible_policy_or_404(policy_id)
+        # Always the signed-in person's own record. Nobody acknowledges for anyone else.
+        employee = g.account.employee
+        if employee is None:
+            abort(400, description="Your account is not linked to an employee record, so there is nothing to sign.")
+        if not policy.current:
+            abort(400, description="This policy has been replaced or retired.")
+        if policy.id not in acknowledged_policy_ids(employee):
+            db.session.add(Acknowledgement(policy=policy, employee=employee))
+            audit("policy.acknowledged", policy, employee=employee.name)
+            db.session.commit()
+            flash(f"Recorded: you have read {policy.title}.", "success")
+        return redirect(url_for("view_policies"))
+
+    @app.route("/policies/<int:policy_id>/revise", methods=["GET", "POST"])
+    @admin_only
+    def revise_policy(policy_id):
+        policy = db.get_or_404(Policy, policy_id)
+        if not policy.current:
+            abort(400, description="This policy has already been replaced or retired.")
+        if request.method == "POST":
+            values, error = validate_policy(request.form)
+            if error:
+                flash(error, "error")
+                return render_template("policy_form.html", policy=policy, values=request.form), 400
+            if values["title"] == policy.title and values["body"] == policy.body:
+                flash("Nothing changed, so nobody is asked to acknowledge it again.", "info")
+                return redirect(url_for("view_policy", policy_id=policy.id))
+            revision = Policy(**values, published_by=g.account.email, replaces=policy)
+            policy.retired_at = utcnow()
+            db.session.add(revision)
+            audit("policy.revised", revision, replaces=policy.id)
+            db.session.commit()
+            flash(f"Published a new version of {revision.title}. Everyone is asked to acknowledge it again.", "success")
+            return redirect(url_for("view_policy", policy_id=revision.id))
+        return render_template("policy_form.html", policy=policy, values={})
+
+    @app.post("/policies/<int:policy_id>/retire")
+    @admin_only
+    def retire_policy(policy_id):
+        policy = db.get_or_404(Policy, policy_id)
+        if policy.current:
+            policy.retired_at = utcnow()
+            audit("policy.retired", policy)
+            db.session.commit()
+            flash(f"Retired {policy.title}. Its acknowledgements are kept.", "success")
+        return redirect(url_for("view_policies"))
+
     @app.get("/audit")
     @admin_only
     def view_audit():
@@ -846,6 +952,7 @@ SUBJECT_TYPES = {
     Account: "account",
     Employee: "employee",
     Department: "department",
+    Policy: "policy",
     TimeOffRequest: "time off",
     ChecklistTask: "checklist task",
 }
@@ -890,7 +997,67 @@ def describe_subject(subject):
         return subject.email
     if isinstance(subject, (TimeOffRequest, ChecklistTask)):
         return subject.employee.name
+    if isinstance(subject, Policy):
+        return subject.title
     return subject.name
+
+
+def visible_policy_or_404(policy_id):
+    """Current policies are for everyone. Old versions stay readable for HR."""
+    policy = db.get_or_404(Policy, policy_id)
+    if not policy.current and not g.access.is_admin:
+        abort(404)
+    return policy
+
+
+def acknowledged_policy_ids(employee):
+    """policy id -> when this employee acknowledged it."""
+    if employee is None:
+        return {}
+    rows = db.session.execute(
+        db.select(Acknowledgement.policy_id, Acknowledgement.acknowledged_at).where(
+            Acknowledgement.employee_id == employee.id
+        )
+    )
+    return dict(rows.all())
+
+
+def current_staff_count():
+    return db.session.scalar(db.select(db.func.count(Employee.id)).where(Employee.status != "terminated"))
+
+
+def acknowledgement_count(policy):
+    """How many people currently on staff have acknowledged policy."""
+    return db.session.scalar(
+        db.select(db.func.count(Acknowledgement.id))
+        .join(Employee, Employee.id == Acknowledgement.employee_id)
+        .where(Acknowledgement.policy_id == policy.id, Employee.status != "terminated")
+    )
+
+
+def outstanding_policies(employee):
+    """Current policies this employee has not acknowledged yet."""
+    if employee is None:
+        return []
+    done = acknowledged_policy_ids(employee)
+    policies = db.session.scalars(
+        db.select(Policy).where(Policy.retired_at.is_(None)).order_by(Policy.title, Policy.id)
+    ).all()
+    return [policy for policy in policies if policy.id not in done]
+
+
+def validate_policy(form):
+    title, error = clean_text(form, "title", "Title", max_length=120)
+    if error:
+        return None, error
+    body = form.get("body", "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not body:
+        return None, "Policy text is required."
+    if len(body) > MAX_POLICY_LENGTH:
+        return None, f"Policy text must be {MAX_POLICY_LENGTH:,} characters or fewer."
+    if POLICY_CONTROL_CHARACTERS.search(body):
+        return None, "Policy text cannot contain control characters."
+    return {"title": title, "body": body}, None
 
 
 def employee_snapshot(employee):
@@ -1157,6 +1324,7 @@ def render_personal_home(today):
         waiting=waiting,
         team_out=team_out,
         report_count=len(reports),
+        policies=outstanding_policies(employee),
         today=today,
     )
 
@@ -1545,6 +1713,21 @@ DEMO_STAFF = [
 ]
 
 
+DEMO_POLICIES = [
+    (
+        "Code of conduct",
+        "This is demo text, not a real policy.\n\nTreat colleagues with respect. Raise concerns with your "
+        "manager or with the People team. Keep company and customer information confidential.",
+        set(),
+    ),
+    (
+        "Remote work and equipment",
+        "This is demo text, not a real policy.\n\nWork from anywhere your manager agrees to. Lock your "
+        "laptop when you step away, and report lost equipment to the People team the same day.",
+        {"Casey Example", "Skyler Example", "Riley Example"},
+    ),
+]
+
 # The People Partner is the HR admin. Anyone with reports gets the manager role.
 DEMO_ADMIN = "Emerson Example"
 DEMO_SIGN_INS = [("admin", "Emerson Example"), ("manager", "Riley Example"), ("employee", "Casey Example")]
@@ -1580,6 +1763,15 @@ def seed_demo_data(today):
             task.completed_at = now
             task.completed_by = demo_email(DEMO_ADMIN)
     people["Parker Example"].end_date = today - timedelta(days=45)
+
+    # Two short made-up policies. Everyone has read the first; three people still owe the second.
+    current = [employee for employee in people.values() if employee.status != "terminated"]
+    for title, body, waiting in DEMO_POLICIES:
+        policy = Policy(title=title, body=body, published_by=demo_email(DEMO_ADMIN))
+        db.session.add(policy)
+        for employee in current:
+            if employee.name not in waiting:
+                policy.acknowledgements.append(Acknowledgement(employee=employee))
 
     raise_on = anniversary_on(today, today.year - 1)
     jordan = people["Jordan Example"]

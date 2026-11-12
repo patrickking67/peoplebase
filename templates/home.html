@@ -8,6 +8,7 @@
             {% if out_today %}{{ out_today|length }} out today. {% endif %}
             {% if status_counts.on_leave %}{{ status_counts.on_leave }} on leave. {% endif %}
             {% if pending_count %}<a href="{{ url_for('view_time_off', status='pending') }}">{{ pending_count }} time-off {{ "request" if pending_count == 1 else "requests" }} waiting</a>.{% else %}No time off waiting for a decision.{% endif %}
+            {% if policies %}<a href="{{ url_for('view_policies') }}">{{ policies|length }} {{ "policy needs" if policies|length == 1 else "policies need" }} your acknowledgement</a>.{% endif %}
         </p>
     </div>
     <div class="heading-actions">

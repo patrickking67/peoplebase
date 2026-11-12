@@ -665,3 +665,22 @@ div.org-node:hover { border-color: var(--line); }
     .checklist li { grid-template-columns: auto minmax(0, 1fr); }
     .checklist small, .checklist form { grid-column: 2; }
 }
+
+/* Policies */
+
+.policy-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: var(--measure); line-height: 1.65; }
+.stack { display: grid; gap: 20px; }
+.stack .panel p + p, .stack .panel p + form { margin-top: 10px; }
+.progress { display: grid; gap: 6px; min-width: min(16rem, 100%); font-size: var(--step--1); }
+textarea {
+    width: 100%;
+    padding: 10px 12px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-control);
+    font: inherit;
+    line-height: 1.5;
+    resize: vertical;
+}
+textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }

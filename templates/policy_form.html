@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}{{ "Revise " ~ policy.title if policy else "Publish a policy" }} | PeopleBase{% endblock %}
+{% block content %}
+<section class="form-layout">
+    <header>
+        <h1>{% if policy %}Revise {{ policy.title }}.{% else %}Publish a policy.{% endif %}</h1>
+        <p>{% if policy %}Saving publishes a new version and retires this one. Existing acknowledgements stay with the old text, and everyone on staff is asked to acknowledge the new one.{% else %}Everyone on staff is asked to read and acknowledge it. Published text cannot be edited afterwards, only replaced by a new version.{% endif %} Plain text only; line breaks are kept.</p>
+    </header>
+    <form method="post" action="{{ url_for('revise_policy', policy_id=policy.id) if policy else url_for('add_policy') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+            <legend>Policy</legend>
+            <label for="title">Title</label>
+            <input type="text" name="title" id="title" value="{{ values.get('title', policy.title if policy else '') }}" maxlength="120" required>
+            <label for="body">Text</label>
+            <textarea name="body" id="body" rows="14" maxlength="20000" required>{{ values.get('body', policy.body if policy else '') }}</textarea>
+        </fieldset>
+        <div class="form-actions"><button class="button" type="submit">{{ "Publish new version" if policy else "Publish policy" }}</button><a href="{{ url_for('view_policy', policy_id=policy.id) if policy else url_for('view_policies') }}">Cancel</a></div>
+    </form>
+</section>
+{% endblock %}

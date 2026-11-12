@@ -62,6 +62,12 @@ ROUTES = {
     "reset_account_password": ("POST", "/accounts/1/password", 302, 403, 403, 302),
     "view_audit": ("GET", "/audit", 302, 403, 403, 200),
     "view_checklists": ("GET", "/checklists", 302, 403, 200, 200),
+    "view_policies": ("GET", "/policies", 302, 200, 200, 200),
+    "add_policy": ("GET", "/policies/new", 302, 403, 403, 200),
+    "view_policy": ("GET", "/policies/999", 302, 404, 404, 404),
+    "acknowledge_policy": ("POST", "/policies/999/acknowledge", 302, 404, 404, 404),
+    "revise_policy": ("POST", "/policies/999/revise", 302, 403, 403, 404),
+    "retire_policy": ("POST", "/policies/999/retire", 302, 403, 403, 404),
     "update_checklist_task": ("POST", "/checklists/999", 302, 404, 404, 404),
 }
 

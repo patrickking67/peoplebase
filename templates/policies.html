@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Policies | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Policies</h1><p class="lede">Read each policy and acknowledge it. A revised policy asks everyone again, and each acknowledgement stays tied to the exact text that was read.</p></div>
+    {% if access.is_admin %}<div class="heading-actions"><a class="button" href="{{ url_for('add_policy') }}">Publish a policy</a></div>{% endif %}
+</section>
+{% if rows %}
+<ul class="request-list">
+    {% for row in rows %}
+    {% set waiting = current_account.employee and not row.acknowledged_at %}
+    <li class="request{% if waiting %} request-pending{% endif %}">
+        <div class="request-main">
+            <p class="request-who"><a href="{{ url_for('view_policy', policy_id=row.policy.id) }}">{{ row.policy.title }}</a>
+                {% if row.acknowledged_at %}<span class="status status-approved">Acknowledged {{ row.acknowledged_at.strftime('%Y-%m-%d') }}</span>
+                {% elif waiting %}<span class="status status-pending">Needs your acknowledgement</span>{% endif %}
+            </p>
+            <p class="request-when">Published <time datetime="{{ row.policy.published_at.strftime('%Y-%m-%d') }}">{{ row.policy.published_at.strftime('%Y-%m-%d') }}</time>{% if row.policy.replaces_id %}, replacing an earlier version{% endif %}</p>
+        </div>
+        {% if row.done is not none %}
+        <div class="progress">
+            <meter min="0" max="{{ [staff_count, 1]|max }}" value="{{ row.done }}" aria-hidden="true">{{ row.done }}</meter>
+            <p class="quiet"><span class="num">{{ row.done }} of {{ staff_count }}</span> on staff have acknowledged</p>
+        </div>
+        {% elif waiting %}
+        <a class="button" href="{{ url_for('view_policy', policy_id=row.policy.id) }}">Read and acknowledge</a>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<section class="empty-state"><h2>No policies yet.</h2><p>{% if access.is_admin %}Publish the first one and everyone on staff is asked to acknowledge it.{% else %}When HR publishes a policy it shows up here for you to read.{% endif %}</p>{% if access.is_admin %}<a class="button" href="{{ url_for('add_policy') }}">Publish a policy</a>{% endif %}</section>
+{% endif %}
+{% endblock %}

@@ -92,6 +92,10 @@ class Employee(db.Model):
         order_by="(ChecklistTask.kind.desc(), ChecklistTask.position)",
     )
 
+    acknowledgements = db.relationship(
+        "Acknowledgement", back_populates="employee", cascade="all, delete-orphan"
+    )
+
     @property
     def status_label(self):
         return EMPLOYMENT_STATUSES.get(self.status, self.status)
@@ -159,6 +163,41 @@ def checklist_progress(tasks):
     else:
         label = "In progress"
     return done, total, label
+
+
+class Policy(db.Model):
+    """A policy people must acknowledge. The text never changes after it is
+    published: a revision is a new row that replaces this one, so every
+    acknowledgement points at the exact words that were agreed to."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    published_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    published_by = db.Column(db.String(254), nullable=False)
+    retired_at = db.Column(db.DateTime, nullable=True)
+    replaces_id = db.Column(db.Integer, db.ForeignKey("policy.id"), nullable=True)
+
+    replaces = db.relationship("Policy", remote_side=[id])
+    acknowledgements = db.relationship("Acknowledgement", back_populates="policy", cascade="all, delete-orphan")
+
+    @property
+    def current(self):
+        return self.retired_at is None
+
+
+class Acknowledgement(db.Model):
+    """One employee confirming they read one policy."""
+
+    __table_args__ = (db.UniqueConstraint("policy_id", "employee_id", name="uq_acknowledgement_policy_employee"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey("policy.id"), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    acknowledged_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    policy = db.relationship("Policy", back_populates="acknowledgements")
+    employee = db.relationship("Employee", back_populates="acknowledgements")
 
 
 class TimeOffRequest(db.Model):
@@ -266,6 +305,10 @@ AUDIT_ACTIONS = {
     "time_off.denied": "Denied time off",
     "checklist.completed": "Completed checklist task",
     "checklist.reopened": "Reopened checklist task",
+    "policy.published": "Published policy",
+    "policy.revised": "Revised policy",
+    "policy.retired": "Retired policy",
+    "policy.acknowledged": "Acknowledged policy",
     "export.directory_csv": "Exported directory CSV",
 }
 AUDIT_GROUPS = {
@@ -276,6 +319,7 @@ AUDIT_GROUPS = {
     "department": "Departments",
     "time_off": "Time off",
     "checklist": "Onboarding and offboarding",
+    "policy": "Policies",
     "export": "Exports",
 }
 
