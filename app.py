@@ -55,6 +55,8 @@ from models import (
     JobChange,
     LoginThrottle,
     Policy,
+    Review,
+    ReviewCycle,
     TimeOffRequest,
     checklist_progress,
     db,
@@ -92,6 +94,7 @@ SECURITY_HEADERS = {
 }
 MAX_TIME_OFF_DAYS = 60
 MAX_POLICY_LENGTH = 20_000
+MAX_REVIEW_LENGTH = 4_000
 # Policy text keeps its line breaks, so only the other control characters are refused.
 POLICY_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -953,6 +956,108 @@ def create_app(test_config=None):
             flash(f"Retired {policy.title}. Its acknowledgements are kept.", "success")
         return redirect(url_for("view_policies"))
 
+    @app.get("/reviews")
+    def view_reviews():
+        """Own reviews for everyone, reviews to write for a manager, every cycle for HR."""
+        mine = []
+        if g.account.employee_id is not None:
+            mine = db.session.scalars(
+                db.select(Review)
+                .join(ReviewCycle)
+                .where(Review.employee_id == g.account.employee_id)
+                .order_by(ReviewCycle.created_at.desc(), Review.id.desc())
+            ).all()
+        team = []
+        if g.access.is_manager and g.account.employee_id is not None:
+            team = db.session.scalars(
+                db.select(Review)
+                .join(ReviewCycle)
+                .join(Employee, Review.employee_id == Employee.id)
+                .where(Employee.manager_id == g.account.employee_id, ReviewCycle.closed_at.is_(None))
+                .order_by(Employee.name, Review.id)
+            ).all()
+        cycles = []
+        if g.access.is_admin:
+            cycles = db.session.scalars(db.select(ReviewCycle).order_by(ReviewCycle.created_at.desc())).all()
+        return render_template("reviews.html", mine=mine, team=team, cycles=cycles, today=date.today())
+
+    @app.route("/reviews/cycles/new", methods=["GET", "POST"])
+    @admin_only
+    def add_review_cycle():
+        if request.method == "POST":
+            values, error = validate_review_cycle(request.form)
+            if error:
+                flash(error, "error")
+                return render_template("review_cycle_form.html", values=request.form, today=date.today()), 400
+            cycle = ReviewCycle(**values, created_by=g.account.email)
+            staff = db.session.scalars(db.select(Employee).where(Employee.status != "terminated")).all()
+            cycle.reviews = [Review(employee=person) for person in staff]
+            db.session.add(cycle)
+            audit("review.cycle_opened", cycle, people=len(staff))
+            db.session.commit()
+            flash(f"Opened {cycle.name} for {len(staff)} {'person' if len(staff) == 1 else 'people'}.", "success")
+            return redirect(url_for("view_reviews"))
+        return render_template("review_cycle_form.html", values={}, today=date.today())
+
+    @app.post("/reviews/cycles/<int:cycle_id>/close")
+    @admin_only
+    def close_review_cycle(cycle_id):
+        cycle = db.get_or_404(ReviewCycle, cycle_id)
+        if cycle.is_open:
+            cycle.closed_at = utcnow()
+            audit("review.cycle_closed", cycle)
+            db.session.commit()
+            flash(f"Closed {cycle.name}. People can now read their manager's review.", "success")
+        return redirect(url_for("view_reviews"))
+
+    @app.get("/reviews/<int:review_id>")
+    def view_review(review_id):
+        review = db.get_or_404(Review, review_id)
+        if not g.access.can_view_review(review):
+            # The same answer as a review that does not exist, so ids cannot be probed.
+            abort(404)
+        if not g.access.is_self(review.employee):
+            audit("view.review", review)
+            db.session.commit()
+        return render_template("review.html", review=review, values={})
+
+    @app.post("/reviews/<int:review_id>/self")
+    def submit_self_review(review_id):
+        review = db.get_or_404(Review, review_id)
+        if not g.access.can_view_review(review):
+            abort(404)
+        if not g.access.can_write_self_review(review):
+            abort(403, description="This self review is closed or already submitted, or it is not yours to write.")
+        values, error = validate_review_text(request.form)
+        if error:
+            flash(error, "error")
+            return render_template("review.html", review=review, values=request.form), 400
+        review.self_rating, review.self_text = values["rating"], values["text"]
+        review.self_submitted_at = utcnow()
+        audit("review.self_submitted", review)
+        db.session.commit()
+        flash("Submitted your self review. Your manager can read it now.", "success")
+        return redirect(url_for("view_review", review_id=review.id))
+
+    @app.post("/reviews/<int:review_id>/manager")
+    def submit_manager_review(review_id):
+        review = db.get_or_404(Review, review_id)
+        if not g.access.can_view_review(review):
+            abort(404)
+        if not g.access.can_write_manager_review(review):
+            abort(403, description="Only the direct manager can write this, after the self review is in.")
+        values, error = validate_review_text(request.form)
+        if error:
+            flash(error, "error")
+            return render_template("review.html", review=review, values=request.form), 400
+        review.manager_rating, review.manager_text = values["rating"], values["text"]
+        review.manager_submitted_at = utcnow()
+        review.manager_submitted_by = g.account.email
+        audit("review.manager_submitted", review)
+        db.session.commit()
+        flash("Submitted your review. The person sees it when HR closes the cycle.", "success")
+        return redirect(url_for("view_review", review_id=review.id))
+
     @app.get("/reports/headcount")
     def view_headcount_report():
         report, scope = scoped_headcount_report(g.access)
@@ -1072,6 +1177,8 @@ SUBJECT_TYPES = {
     Policy: "policy",
     TimeOffRequest: "time off",
     ChecklistTask: "checklist task",
+    ReviewCycle: "review cycle",
+    Review: "review",
 }
 
 
@@ -1114,6 +1221,8 @@ def describe_subject(subject):
         return subject.email
     if isinstance(subject, (TimeOffRequest, ChecklistTask)):
         return subject.employee.name
+    if isinstance(subject, Review):
+        return f"{subject.employee.name}, {subject.cycle.name}"
     if isinstance(subject, Policy):
         return subject.title
     return subject.name
@@ -1191,6 +1300,37 @@ def validate_policy(form):
     if POLICY_CONTROL_CHARACTERS.search(body):
         return None, "Policy text cannot contain control characters."
     return {"title": title, "body": body}, None
+
+
+def validate_review_cycle(form):
+    name, error = clean_text(form, "name", "Cycle name")
+    if error:
+        return None, error
+    self_due, error = parse_date(form.get("self_due"), "Self review due date", required=True)
+    if error:
+        return None, error
+    manager_due, error = parse_date(form.get("manager_due"), "Manager review due date", required=True)
+    if error:
+        return None, error
+    if manager_due < self_due:
+        return None, "Manager reviews cannot be due before self reviews."
+    return {"name": name, "self_due": self_due, "manager_due": manager_due}, None
+
+
+def validate_review_text(form):
+    """A 1 to 5 rating and a write-up that keeps its line breaks."""
+    text_rating = form.get("rating", "").strip()
+    rating = int(text_rating) if is_small_id(text_rating) else 0
+    if not 1 <= rating <= 5:
+        return None, "Choose a rating from 1 to 5."
+    text = form.get("text", "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return None, "Write a few lines before you submit."
+    if len(text) > MAX_REVIEW_LENGTH:
+        return None, f"Keep it to {MAX_REVIEW_LENGTH:,} characters or fewer."
+    if POLICY_CONTROL_CHARACTERS.search(text):
+        return None, "The text cannot contain control characters."
+    return {"rating": rating, "text": text}, None
 
 
 def employee_snapshot(employee):
@@ -1963,6 +2103,24 @@ def seed_demo_data(today):
                 decided_at=utcnow() if approver else None,
             )
         )
+    # An open review cycle: Casey has written a self review, Jordan has both halves.
+    cycle = ReviewCycle(
+        name="Annual review",
+        self_due=today + timedelta(days=14),
+        manager_due=today + timedelta(days=28),
+        created_by=demo_email(DEMO_ADMIN),
+    )
+    for employee in current:
+        cycle.reviews.append(Review(employee=employee))
+    for review in cycle.reviews:
+        if review.employee.name in {"Casey Example", "Jordan Example"}:
+            review.self_rating, review.self_submitted_at = 4, now
+            review.self_text = "Shipped the billing migration and mentored two new engineers."
+        if review.employee.name == "Jordan Example":
+            review.manager_rating, review.manager_submitted_at = 5, now
+            review.manager_submitted_by = demo_email("Riley Example")
+            review.manager_text = "Led the migration end to end and raised the bar for the team."
+    db.session.add(cycle)
     # One account per current demo person. The domain is reserved for examples
     # and the password is random per run, so nothing here works anywhere else.
     password = new_temporary_password()

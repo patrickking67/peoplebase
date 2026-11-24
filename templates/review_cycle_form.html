@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Open a review cycle | PeopleBase{% endblock %}
+{% block content %}
+<section class="form-layout">
+    <header>
+        <h1>Open a review cycle.</h1>
+        <p>Everyone on staff gets a review: first their own write-up, then their direct manager's. People read their manager's review once you close the cycle.</p>
+    </header>
+    <form method="post" action="{{ url_for('add_review_cycle') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+            <legend>Cycle</legend>
+            <label for="name">Name</label>
+            <input type="text" name="name" id="name" value="{{ values.get('name', '') }}" maxlength="100" placeholder="2026 annual review" required>
+            <label for="self_due">Self reviews due</label>
+            <input type="date" name="self_due" id="self_due" min="1900-01-01" max="2100-12-31" value="{{ values.get('self_due', '') }}" required>
+            <label for="manager_due">Manager reviews due</label>
+            <input type="date" name="manager_due" id="manager_due" min="1900-01-01" max="2100-12-31" value="{{ values.get('manager_due', '') }}" required>
+        </fieldset>
+        <div class="form-actions"><button class="button" type="submit">Open cycle</button><a href="{{ url_for('view_reviews') }}">Cancel</a></div>
+    </form>
+</section>
+{% endblock %}

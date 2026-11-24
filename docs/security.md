@@ -44,6 +44,9 @@ until HR gives the account the manager role.
 | Time off: request | Self | Self | Anyone |
 | Time off: approve or deny | No | Reports, never own | Anyone, never own |
 | Onboarding and offboarding checklist | View own; tick tasks the employee owns | View and complete for reports | View and complete for everyone |
+| Performance review: read | Own, manager half after close | Direct reports only | Everyone |
+| Performance review: write | Own self review | Direct reports, after their self review | No |
+| Review cycles: open and close | No | No | Yes |
 | Policies: read and acknowledge for yourself | Yes | Yes | Yes |
 | Policies: publish, see who has not acknowledged | No | No | Yes |
 | Add, edit, delete employees; manage departments | No | No | Yes |
@@ -68,7 +71,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
 `tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
 `tests/test_policies.py` (15, 16), `tests/test_reports.py` (7) and
-`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18) and `tests/test_job_history.py` (19) and `tests/test_checklists.py` (20) and `tests/test_calendar.py` (21).
+`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18) and `tests/test_job_history.py` (19) and `tests/test_checklists.py` (20) and `tests/test_calendar.py` (21) and `tests/test_reviews.py` (22, 23).
 
 | # | Abuse case | Control |
 | --- | --- | --- |
@@ -93,6 +96,8 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 | 19 | **Forging or reading job history.** Post `position`, `department_id`, `manager_id` or a reason for yourself, your report or a stranger to write a promotion, or open someone else's history by id. | Job history rows are created only by the HR-only record handlers, with the date and reason validated, and are derived from the employee row on the server. The app has no route to edit or delete a row. A non-HR post gets 403 and changes nothing. The history is part of the profile page, so it follows the profile rule: own, reports, or HR; anyone else gets 404. |
 | 20 | **Ticking off tasks that are not yours.** Post to `/checklists/<id>` for your own offboarding access removal, an HR step of your onboarding, or a colleague's task, or send an `owner` field to take a task over. | The task is resolved to its employee and checked against the caller's reach first, so a colleague's task is a 404. Each task has a server-side owner (HR, manager or employee). A person may tick, never reopen, only a task whose owner is the employee. Managers above and HR may tick or reopen any. The owner is never read from a form. |
 | 21 | **Reading another team's leave through the calendar.** Change `month`, add `employee`, `team` or `manager_id` parameters, or read a colleague's sick leave off the shared view. | The set of people on the calendar is worked out on the server from the signed-in account: HR everyone, anyone else themselves, their reports, their manager and the people under that manager. No query parameter widens it. Colleagues see only that someone is out; the kind of leave and pending requests are shown only to the person, their managers and HR. Denied requests never show. A bad `month` falls back to this month. |
+| 22 | **Reading reviews that are not yours.** Open `/reviews/<id>` for a peer, a manager's other team or a skip-level report; read a manager's review before it is released; read a self review before it is submitted. | A review is readable only by the person, their direct manager (while their account has the manager role) and HR. Managers further up the line cannot read it. Anyone else gets the same 404 as a review that does not exist. The manager's half stays hidden from the person until HR closes the cycle, and the person's half stays hidden from the manager until it is submitted. Reading someone else's review writes a `view.review` audit entry. |
+| 23 | **Writing a review you may not write.** Post a self review for a colleague, rewrite yours after seeing the manager's, post the manager half for yourself, as a skip-level manager or as a peer, or send `manager_rating` in the self form. | Each half is written once and never edited. The self half needs the person's own session and an open cycle. The manager half needs the direct manager, a submitted self review and an open cycle. HR cannot write either half. Ratings are 1 to 5 from ASCII digits, text is capped and refuses control characters, and identity and author come from the session, never from a form field. Review text is never written to the audit log. |
 
 ## What this does not cover
 

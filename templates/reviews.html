@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Reviews | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Performance reviews</h1><p class="lede">Each cycle has a self review and then a review by your direct manager. You see your manager's review when HR closes the cycle.</p></div>
+    {% if access.is_admin %}<div class="heading-actions"><a class="button" href="{{ url_for('add_review_cycle') }}">Open a cycle</a></div>{% endif %}
+</section>
+
+{% if mine %}
+<section class="panel panel-wide" aria-labelledby="mine-title">
+    <h2 id="mine-title">Your reviews</h2>
+    <ul class="request-list">
+        {% for review in mine %}
+        <li class="request request-{{ 'approved' if review.manager_done else 'pending' }}">
+            <div class="request-main">
+                <p class="request-who"><a href="{{ url_for('view_review', review_id=review.id) }}">{{ review.cycle.name }}</a> <span class="status status-{{ 'approved' if review.self_done else 'pending' }}">{{ review.status_label }}</span></p>
+                <p class="request-when">Self review due <time datetime="{{ review.cycle.self_due.isoformat() }}">{{ review.cycle.self_due.isoformat() }}</time>{% if not review.cycle.is_open %}, cycle closed{% endif %}</p>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if access.is_manager %}
+<section class="panel panel-wide" aria-labelledby="team-title">
+    <h2 id="team-title">Reviews you write</h2>
+    {% if team %}
+    <ul class="request-list">
+        {% for review in team %}
+        <li class="request request-{{ 'approved' if review.manager_done else 'pending' }}">
+            <div class="request-main">
+                <p class="request-who"><a href="{{ url_for('view_review', review_id=review.id) }}">{{ review.employee.name }}</a> <span class="status status-{{ 'approved' if review.manager_done else 'pending' }}">{{ review.status_label }}</span></p>
+                <p class="request-when">{{ review.cycle.name }}, your review due <time datetime="{{ review.cycle.manager_due.isoformat() }}">{{ review.cycle.manager_due.isoformat() }}</time></p>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="quiet">No open reviews for your direct reports.</p>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if access.is_admin %}
+<section class="panel panel-wide" aria-labelledby="cycles-title">
+    <h2 id="cycles-title">Cycles</h2>
+    {% if cycles %}
+    <ul class="request-list">
+        {% for cycle in cycles %}
+        {% set done = cycle.reviews|selectattr('manager_done')|list|length %}
+        <li class="request request-{{ 'pending' if cycle.is_open else 'approved' }}">
+            <div class="request-main">
+                <p class="request-who">{{ cycle.name }} <span class="status status-{{ 'pending' if cycle.is_open else 'approved' }}">{{ 'Open' if cycle.is_open else 'Closed' }}</span></p>
+                <p class="request-when">{{ done }} of {{ cycle.reviews|length }} complete. Self reviews due {{ cycle.self_due.isoformat() }}, manager reviews due {{ cycle.manager_due.isoformat() }}.</p>
+                <ul class="plain-list">
+                    {% for review in cycle.reviews %}
+                    <li><a href="{{ url_for('view_review', review_id=review.id) }}">{{ review.employee.name }}</a><span>{{ review.status_label }}</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% if cycle.is_open %}
+            <form method="post" action="{{ url_for('close_review_cycle', cycle_id=cycle.id) }}" data-confirm="Close {{ cycle.name }}? Nobody can write or change a review afterwards, and people can read their manager's review.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger" type="submit">Close cycle</button>
+            </form>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="quiet">No cycles yet. Opening one creates a review for everyone on staff.</p>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if not mine and not access.is_manager and not access.is_admin %}
+<section class="empty-state"><h2>No reviews yet.</h2><p>When HR opens a cycle, your self review appears here.</p></section>
+{% endif %}
+{% endblock %}

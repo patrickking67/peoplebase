@@ -71,6 +71,12 @@ ROUTES = {
     "acknowledge_policy": ("POST", "/policies/999/acknowledge", 302, 404, 404, 404),
     "revise_policy": ("POST", "/policies/999/revise", 302, 403, 403, 404),
     "retire_policy": ("POST", "/policies/999/retire", 302, 403, 403, 404),
+    "view_reviews": ("GET", "/reviews", 302, 200, 200, 200),
+    "add_review_cycle": ("GET", "/reviews/cycles/new", 302, 403, 403, 200),
+    "close_review_cycle": ("POST", "/reviews/cycles/999/close", 302, 403, 403, 404),
+    "view_review": ("GET", "/reviews/999", 302, 404, 404, 404),
+    "submit_self_review": ("POST", "/reviews/999/self", 302, 404, 404, 404),
+    "submit_manager_review": ("POST", "/reviews/999/manager", 302, 404, 404, 404),
     "update_checklist_task": ("POST", "/checklists/999", 302, 404, 404, 404),
 }
 

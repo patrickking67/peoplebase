@@ -120,6 +120,8 @@ class Employee(db.Model):
         "Acknowledgement", back_populates="employee", cascade="all, delete-orphan"
     )
 
+    reviews = db.relationship("Review", back_populates="employee", cascade="all, delete-orphan")
+
     @property
     def status_label(self):
         return EMPLOYMENT_STATUSES.get(self.status, self.status)
@@ -226,6 +228,65 @@ def checklist_progress(tasks):
     else:
         label = "In progress"
     return done, total, label
+
+
+class ReviewCycle(db.Model):
+    """A round of performance reviews. HR opens it, which creates one Review per
+    person on staff, and closes it, which releases the manager reviews."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    self_due = db.Column(db.Date, nullable=False)
+    manager_due = db.Column(db.Date, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    created_by = db.Column(db.String(254), nullable=False)
+    closed_at = db.Column(db.DateTime, nullable=True)
+
+    reviews = db.relationship(
+        "Review", back_populates="cycle", cascade="all, delete-orphan", order_by="Review.id"
+    )
+
+    @property
+    def is_open(self):
+        return self.closed_at is None
+
+
+class Review(db.Model):
+    """One person's review in one cycle: their own write-up, then their direct
+    manager's. Each half is written once and never edited."""
+
+    __table_args__ = (db.UniqueConstraint("cycle_id", "employee_id", name="uq_review_cycle_employee"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    cycle_id = db.Column(db.Integer, db.ForeignKey("review_cycle.id"), nullable=False, index=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    self_rating = db.Column(db.Integer, nullable=True)
+    self_text = db.Column(db.Text, nullable=False, default="", server_default="")
+    self_submitted_at = db.Column(db.DateTime, nullable=True)
+    manager_rating = db.Column(db.Integer, nullable=True)
+    manager_text = db.Column(db.Text, nullable=False, default="", server_default="")
+    manager_submitted_at = db.Column(db.DateTime, nullable=True)
+    # The email of whoever wrote it, kept as text so it survives account changes.
+    manager_submitted_by = db.Column(db.String(254), nullable=True)
+
+    cycle = db.relationship("ReviewCycle", back_populates="reviews")
+    employee = db.relationship("Employee", back_populates="reviews")
+
+    @property
+    def self_done(self):
+        return self.self_submitted_at is not None
+
+    @property
+    def manager_done(self):
+        return self.manager_submitted_at is not None
+
+    @property
+    def status_label(self):
+        if self.self_done and self.manager_done:
+            return "Complete"
+        if self.self_done:
+            return "Waiting for manager"
+        return "Waiting for self review"
 
 
 class Policy(db.Model):
@@ -377,6 +438,10 @@ AUDIT_ACTIONS = {
     "time_off.denied": "Denied time off",
     "checklist.completed": "Completed checklist task",
     "checklist.reopened": "Reopened checklist task",
+    "review.cycle_opened": "Opened review cycle",
+    "review.cycle_closed": "Closed review cycle",
+    "review.self_submitted": "Submitted self review",
+    "review.manager_submitted": "Submitted manager review",
     "policy.published": "Published policy",
     "policy.revised": "Revised policy",
     "policy.retired": "Retired policy",
@@ -384,6 +449,7 @@ AUDIT_ACTIONS = {
     "view.employee": "Viewed employee record",
     "view.directory": "Viewed directory with pay",
     "view.audit": "Viewed audit log",
+    "view.review": "Viewed review",
     "export.directory_csv": "Exported directory CSV",
     "export.headcount_csv": "Exported headcount report CSV",
 }
@@ -396,6 +462,7 @@ AUDIT_GROUPS = {
     "time_off": "Time off",
     "checklist": "Onboarding and offboarding",
     "policy": "Policies",
+    "review": "Performance reviews",
     "export": "Exports",
     "view": "Sensitive views",
 }

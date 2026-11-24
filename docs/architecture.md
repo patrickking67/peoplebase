@@ -41,6 +41,8 @@ erDiagram
     EMPLOYEE ||--o{ TIME_OFF_REQUEST : requests
     EMPLOYEE ||--o{ CHECKLIST_TASK : "on and offboarding"
     EMPLOYEE ||--o{ ACKNOWLEDGEMENT : signs
+    REVIEW_CYCLE ||--o{ REVIEW : opens
+    EMPLOYEE ||--o{ REVIEW : "is reviewed in"
     POLICY ||--o{ ACKNOWLEDGEMENT : "is acknowledged by"
     POLICY ||--o| POLICY : replaces
     EMPLOYEE {
@@ -98,6 +100,22 @@ erDiagram
         string owner
         date due_date
         datetime completed_at
+    }
+    REVIEW_CYCLE {
+        int id PK
+        string name
+        date self_due
+        date manager_due
+        datetime closed_at
+    }
+    REVIEW {
+        int id PK
+        int cycle_id FK
+        int employee_id FK
+        int self_rating
+        datetime self_submitted_at
+        int manager_rating
+        datetime manager_submitted_at
     }
     POLICY {
         int id PK
