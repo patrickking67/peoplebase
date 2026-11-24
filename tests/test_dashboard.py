@@ -202,6 +202,10 @@ def test_seed_demo_fills_an_empty_database(app):
         jordan = db.session.scalar(db.select(Employee).where(Employee.name == "Jordan Example"))
         assert [change.reason for change in jordan.compensation_history] == ["Promotion", "Hired"]
         assert jordan.manager.name == "Riley Example"
+        assert [(job.position, job.reason) for job in jordan.job_history] == [
+            ("Senior Engineer", "Promotion"),
+            ("Engineer", "Hired"),
+        ]
 
 
 def test_seed_demo_creates_fake_accounts_and_prints_their_password(app):
