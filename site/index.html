@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PeopleBase: a small HRIS with real access control</title>
-<meta name="description" content="PeopleBase is an open source Flask HRIS: sign-in with three roles, access enforced on every route, pay history, time off with leave balances, onboarding checklists, policy sign-off and an append-only audit log.">
+<meta name="description" content="PeopleBase is an open source Flask HRIS: sign-in with three roles, access enforced on every route, job history, pay history, time off with a team calendar, onboarding checklists, performance reviews, documents, policy sign-off and an append-only audit log.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#2546f0">
 <link rel="canonical" href="https://patrickking67.github.io/peoplebase/">
@@ -164,6 +164,7 @@
   <nav aria-label="Project links">
     <a href="#security">Security model</a>
     <a href="#screens">Screens</a>
+    <a href="#features">Features</a>
     <a href="#run">Run it</a>
     <a href="https://github.com/patrickking67/peoplebase">GitHub</a>
   </nav>
@@ -173,7 +174,7 @@
   <div class="wrap hero">
     <div>
       <h1>People data, and who gets to see it.</h1>
-      <p class="lede">PeopleBase is a small HRIS in Flask: records, pay history, time off, onboarding, policies and an audit log. Employees, managers and HR sign in, and the server decides on every request what each of them may open.</p>
+      <p class="lede">PeopleBase is a small HRIS in Flask: records and job history, pay, time off with a team calendar, onboarding, performance reviews, documents, policies and an audit log of changes and sensitive reads. Employees, managers and HR sign in, and the server decides on every request what each of them may open.</p>
       <div class="actions">
         <a class="button" href="https://github.com/patrickking67/peoplebase">View the source</a>
         <a class="button button-quiet" href="https://github.com/patrickking67/peoplebase/blob/main/docs/security.md">Read the security model</a>
@@ -275,7 +276,42 @@
         <source media="(prefers-color-scheme: dark)" srcset="assets/audit-log-dark.webp">
         <img src="assets/audit-log-light.webp" width="2560" height="1600" alt="The audit log: rows for a sign-in, a directory CSV export, a completed checklist task and a pay change showing the old and new title and salary." loading="lazy">
       </picture>
-          <figcaption><strong>Audit log.</strong> Who changed what, with old and new values. HR can read it; nobody can edit it.</figcaption>
+          <figcaption><strong>Audit log.</strong> Who changed what, with old and new values, and who looked at someone else's record. HR can read it; nobody can edit it.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/reviews-dark.webp">
+        <img src="assets/reviews-light.webp" width="2560" height="1600" alt="A manager's view of one review: the person's self review rated 4 of 5 and the manager's review rated 5 of 5, each a short paragraph, in a cycle that is still open." loading="lazy">
+      </picture>
+          <figcaption><strong>Performance reviews.</strong> A self review, then the direct manager's. Each half is written once, and the person reads the manager's only after HR closes the cycle.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/calendar-dark.webp">
+        <img src="assets/calendar-light.webp" width="2560" height="1600" alt="The team calendar for November 2026 signed in as HR, a month grid with leave shown as names and the kind of leave on the days people are out." loading="lazy">
+      </picture>
+          <figcaption><strong>Team calendar.</strong> Each person sees their own team. Colleagues show as out without the kind of leave; HR sees everyone.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/documents-dark.webp">
+        <img src="assets/documents-light.webp" width="2560" height="1600" alt="The documents page for one person signed in as HR: three PDF files with category, who each is shared with, date added and size, with Download and Delete links and an upload form below." loading="lazy">
+      </picture>
+          <figcaption><strong>Documents.</strong> PDF, PNG and JPEG on a record, each shared with HR only, the person, or the person and their managers.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/onboarding-dark.webp">
+        <img src="assets/onboarding-light.webp" width="2560" height="1600" alt="An onboarding checklist with an owner and due date on each task, two overdue tasks flagged in red, followed by a documents panel and a job history table." loading="lazy">
+      </picture>
+          <figcaption><strong>Checklists with owners.</strong> Each task has an owner and a due date, overdue tasks are flagged, and employees can tick the ones that are theirs.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/job-history-dark.webp">
+        <img src="assets/job-history-light.webp" width="2560" height="1600" alt="A job history table with two rows, Engineer then Senior Engineer, each with department, manager and reason, above the separate compensation history." loading="lazy">
+      </picture>
+          <figcaption><strong>Job history.</strong> Title, department and manager over time, kept apart from pay so managers can read one and not the other.</figcaption>
         </figure>
       </div>
     </div>
@@ -291,7 +327,11 @@
         <div><dt>People and reporting lines</dt><dd>Records with department, manager, status, start date and last day, a searchable directory and the org chart.</dd></div>
         <div><dt>Pay history</dt><dd>Every title or salary change with its effective date and reason, and a CSV export that spreadsheets cannot run as formulas.</dd></div>
         <div><dt>Time off and leave balances</dt><dd>Requests, approval up the reporting line, and balances per leave type that accrue monthly in working days.</dd></div>
-        <div><dt>Onboarding and offboarding</dt><dd>A checklist for each new hire and each leaver. Marking someone as left turns off their account.</dd></div>
+        <div><dt>Onboarding and offboarding</dt><dd>A checklist for each new hire and each leaver, with an owner and a due date on every task. Marking someone as left turns off their account.</dd></div>
+        <div><dt>Job history</dt><dd>Every title, department and manager change with its date and reason, filled from the pay history when you upgrade.</dd></div>
+        <div><dt>Team calendar</dt><dd>A month view of leave. Colleagues see who is out; the kind of leave is for the person, their managers and HR.</dd></div>
+        <div><dt>Performance reviews</dt><dd>Cycles opened by HR, a self review and a direct manager review, released when the cycle closes. Skip-level managers do not read them.</dd></div>
+        <div><dt>Documents</dt><dd>Contracts, letters and certificates, shared with HR only, the person, or the person and their managers. Checked by content, stored outside the web root.</dd></div>
         <div><dt>Policy acknowledgements</dt><dd>Published text never changes. A revision is a new version, and everyone is asked again.</dd></div>
         <div><dt>Headcount and attrition</dt><dd>Twelve months of hires, leavers and headcount, with a CSV cut to the viewer's own reporting tree.</dd></div>
       </dl>
@@ -301,7 +341,7 @@
   <section id="details">
     <div class="wrap proof">
       <div>
-        <p class="count">705</p>
+        <p class="count">706</p>
         <p class="count-label">tests run on every pull request, on Python 3.11, 3.12 and 3.13.</p>
       </div>
       <ul class="checks">
