@@ -59,8 +59,9 @@
             <li class="{{ 'task-done' if task.done else 'task-open' }}">
                 <span class="task-mark" aria-hidden="true"></span>
                 <span class="task-title">{{ task.title }}<span class="visually-hidden">: {{ "done" if task.done else "to do" }}</span></span>
+                <small>{{ task.owner_label }}{% if task.due_date %}, due <time datetime="{{ task.due_date.isoformat() }}">{{ task.due_date.isoformat() }}</time>{% if task.is_overdue(today) %} <strong class="overdue">overdue</strong>{% endif %}{% endif %}</small>
                 {% if task.done %}<small>Done {{ task.completed_at.strftime('%Y-%m-%d') }}{% if access.can_update_checklist(employee) %} by {{ task.completed_by }}{% endif %}</small>{% endif %}
-                {% if access.can_update_checklist(employee) %}
+                {% if access.can_update_task(task, not task.done) %}
                 <form method="post" action="{{ url_for('update_checklist_task', task_id=task.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="done" value="{{ '0' if task.done else '1' }}">

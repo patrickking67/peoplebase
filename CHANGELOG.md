@@ -9,6 +9,9 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- Checklist tasks have an owner (HR, manager or employee) and a due date counted
+  from the start date or last day, with an overdue flag. Employees can tick
+  the tasks they own. Migration 0007. Abuse case 20.
 - Job history: a `job_change` table recording each title, department and
   manager change, shown on the profile. Migration 0006 fills it from the
   existing compensation history. Abuse case 19.
@@ -36,7 +39,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 19 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 20 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people

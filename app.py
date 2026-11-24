@@ -781,16 +781,16 @@ def create_app(test_config=None):
                 tasks = employee.checklist(kind)
                 if any(not task.done for task in tasks):
                     rows.append({"employee": employee, "kind": kind, "tasks": tasks})
-        return render_template("checklists.html", rows=rows)
+        return render_template("checklists.html", rows=rows, today=date.today())
 
     @app.post("/checklists/<int:task_id>")
     def update_checklist_task(task_id):
         task = db.get_or_404(ChecklistTask, task_id)
         if not g.access.can_view_profile(task.employee):
             abort(404)
-        if not g.access.can_update_checklist(task.employee):
-            abort(403, description="Only this person's managers or HR can update their checklist.")
         done = request.form.get("done") == "1"
+        if not g.access.can_update_task(task, done):
+            abort(403, description="Only this person's managers or HR can update this task.")
         if done != task.done:
             task.completed_at = utcnow() if done else None
             task.completed_by = g.account.email if done else None
@@ -1859,12 +1859,12 @@ def seed_demo_data(today):
 
     # Skyler is the newest hire and still onboarding; Parker left and is mostly offboarded.
     now = utcnow()
+    people["Parker Example"].end_date = today - timedelta(days=45)
     for name, kind, finished in (("Skyler Example", "onboarding", 3), ("Parker Example", "offboarding", 4)):
         people[name].start_checklist(kind)
         for task in people[name].checklist(kind)[:finished]:
             task.completed_at = now
             task.completed_by = demo_email(DEMO_ADMIN)
-    people["Parker Example"].end_date = today - timedelta(days=45)
 
     # Two short made-up policies. Everyone has read the first; three people still owe the second.
     current = [employee for employee in people.values() if employee.status != "terminated"]

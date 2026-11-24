@@ -222,3 +222,28 @@ def test_job_history_is_filled_from_compensation_history(migrated_app):
         ("Senior Accountant", "Finance", "Harper Example", "Promotion"),
     ]
     assert schema_differences() == []
+
+
+def test_checklist_tasks_get_owners_when_upgraded(migrated_app):
+    upgrade(revision="0006")
+    with db.engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO employee (id, name, position, salary, status) "
+                "VALUES (1, 'Casey Example', 'Engineer', 1, 'active')"
+            )
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO checklist_task (employee_id, kind, title, position) VALUES "
+                "(1, 'onboarding', 'Signed contract on file', 1), "
+                "(1, 'onboarding', 'Payroll and tax details collected', 2), "
+                "(1, 'onboarding', 'A task someone typed in', 3)"
+            )
+        )
+
+    upgrade()
+
+    rows = db.session.execute(sa.text("SELECT owner, due_date FROM checklist_task ORDER BY id")).all()
+    assert [tuple(row) for row in rows] == [("hr", None), ("employee", None), ("hr", None)]
+    assert schema_differences() == []

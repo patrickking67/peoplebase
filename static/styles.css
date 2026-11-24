@@ -652,6 +652,7 @@ div.org-node:hover { border-color: var(--line); }
 .checklist li:last-child { border-bottom: 0; padding-bottom: 0; }
 .checklist form { margin: 0; }
 .checklist small { color: var(--muted); font-size: 0.8125rem; }
+.checklist .overdue { color: var(--danger); }
 .task-mark {
     width: 18px;
     height: 18px;

@@ -95,6 +95,8 @@ erDiagram
         int employee_id FK
         string kind
         string title
+        string owner
+        date due_date
         datetime completed_at
     }
     POLICY {
