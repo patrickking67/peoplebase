@@ -8,6 +8,7 @@ from app import (
     Account,
     Department,
     Employee,
+    Review,
     TimeOffRequest,
     anniversary_on,
     build_org_tree,
@@ -202,6 +203,7 @@ def test_seed_demo_fills_an_empty_database(app):
         jordan = db.session.scalar(db.select(Employee).where(Employee.name == "Jordan Example"))
         assert [change.reason for change in jordan.compensation_history] == ["Promotion", "Hired"]
         assert jordan.manager.name == "Riley Example"
+        assert db.session.scalar(db.select(db.func.count(Review.id))) == 12
         parker = db.session.scalar(db.select(Employee).where(Employee.name == "Parker Example"))
         assert all(task.due_date is not None for task in parker.checklist("offboarding"))
         assert [(job.position, job.reason) for job in jordan.job_history] == [
