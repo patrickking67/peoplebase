@@ -74,6 +74,30 @@
     {% endif %}
     {% endfor %}
 
+    <section class="panel panel-wide" aria-labelledby="job-title">
+        <h2 id="job-title">Job history</h2>
+        {% if employee.job_history %}
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">Effective</th><th scope="col">Title</th><th scope="col">Department</th><th scope="col">Manager</th><th scope="col">Reason</th></tr></thead>
+                <tbody>
+                    {% for job in employee.job_history %}
+                    <tr>
+                        <td><time datetime="{{ job.effective_date.isoformat() }}">{{ job.effective_date.isoformat() }}</time></td>
+                        <td>{{ job.position }}</td>
+                        <td>{{ job.department_name or "None" }}</td>
+                        <td>{{ job.manager_name or "None" }}</td>
+                        <td>{{ job.reason or "Not given" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="quiet">No changes recorded yet. The next title, department or manager change starts the history.</p>
+        {% endif %}
+    </section>
+
     {% if access.can_view_pay(employee) %}
     <section class="panel panel-wide" aria-labelledby="comp-title">
         <h2 id="comp-title">Compensation history</h2>

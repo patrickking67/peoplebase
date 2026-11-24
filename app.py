@@ -51,6 +51,7 @@ from models import (
     CompensationChange,
     Department,
     Employee,
+    JobChange,
     LoginThrottle,
     Policy,
     TimeOffRequest,
@@ -521,6 +522,7 @@ def create_app(test_config=None):
                     reason="Hired",
                 )
             )
+            employee.job_history.append(job_change_for(employee, employee.start_date or date.today(), "Hired"))
             employee.start_checklist("offboarding" if employee.status == "terminated" else "onboarding")
             db.session.add(employee)
             audit("employee.created", employee, **employee_snapshot(employee))
@@ -554,6 +556,16 @@ def create_app(test_config=None):
                 error = "You cannot mark your own record as left. Ask another HR admin."
             if not error:
                 change, error = validate_compensation_change(request.form, employee, values)
+            # Trust boundary: job history rows come only from this HR-only handler.
+            job_changed = not error and (values["position"], details["department"], details["manager"]) != (
+                employee.position,
+                employee.department,
+                employee.manager,
+            )
+            if job_changed:
+                job_date, error = parse_date(request.form.get("effective_date"), "Effective date")
+                if not error:
+                    job_reason, error = clean_text(request.form, "reason", "Reason for change", required=False)
             if error:
                 flash(error, "error")
                 return render_employee_form(
@@ -563,6 +575,8 @@ def create_app(test_config=None):
             before = employee_snapshot(employee)
             for field, value in {**values, **details}.items():
                 setattr(employee, field, value)
+            if job_changed:
+                employee.job_history.append(job_change_for(employee, job_date or date.today(), job_reason))
             if change:
                 employee.compensation_history.append(change)
                 audit(
@@ -1575,6 +1589,17 @@ def reports_up_to(person, ancestor):
         seen.add(current.id)
         current = current.manager
     return False
+
+
+def job_change_for(employee, effective_date, reason):
+    """A JobChange row for the title, department and manager the employee holds now."""
+    return JobChange(
+        position=employee.position,
+        department_name=employee.department.name if employee.department else "",
+        manager_name=employee.manager.name if employee.manager else "",
+        effective_date=effective_date,
+        reason=reason,
+    )
 
 
 def validate_compensation_change(form, employee, values):

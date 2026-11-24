@@ -185,3 +185,40 @@ def test_every_revision_downgrades_and_upgrades_again(migrated_app):
     upgrade()
 
     assert schema_differences() == []
+
+
+def test_job_history_is_filled_from_compensation_history(migrated_app):
+    """Revision 0006 turns each title in compensation_change into a job row,
+    skipping pay-only changes, and gives the newest row the current department
+    and manager."""
+    upgrade(revision="0005")
+    with db.engine.begin() as connection:
+        connection.execute(sa.text("INSERT INTO department (name) VALUES ('Finance')"))
+        connection.execute(
+            sa.text(
+                "INSERT INTO employee (id, name, position, salary, department_id, manager_id, status) VALUES "
+                "(1, 'Harper Example', 'Finance Director', 190000, 1, NULL, 'active'), "
+                "(2, 'Rowan Example', 'Senior Accountant', 96000, 1, 1, 'active')"
+            )
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO compensation_change (employee_id, position, salary, effective_date, reason, recorded_at) "
+                "VALUES (2, 'Accountant', 86000, '2021-01-04', 'Hired', '2021-01-04 09:00:00'), "
+                "(2, 'Accountant', 90000, '2022-01-03', 'Raise', '2022-01-03 09:00:00'), "
+                "(2, 'Senior Accountant', 96000, '2023-02-01', 'Promotion', '2023-02-01 09:00:00')"
+            )
+        )
+
+    upgrade()
+
+    rows = db.session.execute(
+        sa.text(
+            "SELECT position, department_name, manager_name, reason FROM job_change WHERE employee_id = 2 ORDER BY id"
+        )
+    ).all()
+    assert [tuple(row) for row in rows] == [
+        ("Accountant", "", "", "Hired"),
+        ("Senior Accountant", "Finance", "Harper Example", "Promotion"),
+    ]
+    assert schema_differences() == []
