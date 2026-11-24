@@ -19,6 +19,7 @@
         ('view_employees', 'Directory', ['view_employees', 'employee_profile', 'update_employee', 'add_employee'], true),
         ('org_chart', 'Org chart', ['org_chart'], true),
         ('view_time_off', 'Time off', ['view_time_off', 'request_time_off', 'time_off_calendar'], true),
+        ('view_reviews', 'Reviews', ['view_reviews', 'view_review', 'add_review_cycle'], true),
         ('view_policies', 'Policies', ['view_policies', 'view_policy', 'add_policy', 'revise_policy'], true),
         ('view_checklists', 'Onboarding', ['view_checklists'], access.is_admin or access.is_manager),
         ('view_headcount_report', 'Reports', ['view_headcount_report'], access.can_view_reports()),
