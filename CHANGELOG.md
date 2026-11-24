@@ -9,6 +9,8 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- A team calendar of time off by month. Each person sees their own team;
+  colleagues see who is out without the kind of leave. Abuse case 21.
 - Checklist tasks have an owner (HR, manager or employee) and a due date counted
   from the start date or last day, with an overdue flag. Employees can tick
   the tasks they own. Migration 0007. Abuse case 20.
@@ -39,7 +41,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 20 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 21 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people

@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 564](https://img.shields.io/badge/tests-564-2546f0?style=flat)](#quality)
+[![Tests: 586](https://img.shields.io/badge/tests-586-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -112,7 +112,7 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-20 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+21 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 564 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 586 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
@@ -149,7 +149,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
   with search and filters; an org chart.
 - **Pay.** Compensation history with effective dates and reasons, visible to
   HR and the employee only. CSV export that neutralizes spreadsheet formulas.
-- **Time off.** Requests, approval by anyone above in the reporting line or
+- **Time off.** A team calendar, requests, approval by anyone above in the reporting line or
   HR, and balances per leave type with monthly accrual ([`leave.py`](leave.py)).
 - **Onboarding and offboarding.** A checklist per new hire and per leaver.
   Each task has an owner (HR, manager or employee) and a due date counted from
