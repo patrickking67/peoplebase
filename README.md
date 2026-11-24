@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 531](https://img.shields.io/badge/tests-531-2546f0?style=flat)](#quality)
+[![Tests: 541](https://img.shields.io/badge/tests-541-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -59,7 +59,9 @@ it, create your first HR admin with `flask --app app create-admin`.
 - **An audit log the app cannot rewrite.** Entries are written in the same
   transaction as the change, and the model refuses updates and deletes, per
   row and in bulk ([`models.py`](models.py),
-  [`tests/test_audit.py`](tests/test_audit.py)).
+  [`tests/test_audit.py`](tests/test_audit.py)). Reading someone else's
+  record, HR's directory view and the log itself are logged too
+  ([`tests/test_audit_reads.py`](tests/test_audit_reads.py)).
 - **Migrations that meet old databases where they are.** The baseline revision
   upgrades three historical schema shapes to one, and a test compares the
   migrated schema to the models on SQLite and PostgreSQL
@@ -110,7 +112,7 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-17 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+18 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
@@ -132,7 +134,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 531 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 541 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |

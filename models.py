@@ -324,6 +324,9 @@ AUDIT_ACTIONS = {
     "policy.revised": "Revised policy",
     "policy.retired": "Retired policy",
     "policy.acknowledged": "Acknowledged policy",
+    "view.employee": "Viewed employee record",
+    "view.directory": "Viewed directory with pay",
+    "view.audit": "Viewed audit log",
     "export.directory_csv": "Exported directory CSV",
     "export.headcount_csv": "Exported headcount report CSV",
 }
@@ -337,6 +340,7 @@ AUDIT_GROUPS = {
     "checklist": "Onboarding and offboarding",
     "policy": "Policies",
     "export": "Exports",
+    "view": "Sensitive views",
 }
 
 
