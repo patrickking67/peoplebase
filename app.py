@@ -440,6 +440,10 @@ def create_app(test_config=None):
             .distinct()
             .order_by(Employee.position)
         ).all()
+        if g.access.is_admin:
+            # HR sees pay and former staff here, so each look is recorded.
+            audit("view.directory", matching=summary["matching_count"])
+            db.session.commit()
         filter_args = {
             "q": criteria["search"] or None,
             "position": criteria["position"] or None,
@@ -532,6 +536,10 @@ def create_app(test_config=None):
         if not g.access.can_view_profile(employee):
             # The same answer as a record that does not exist, so ids cannot be probed.
             abort(404)
+        if not g.access.is_self(employee):
+            # Reading someone else's record is sensitive, so it leaves a trace.
+            audit("view.employee", employee, pay_shown=g.access.can_view_pay(employee))
+            db.session.commit()
         return render_template("employee.html", employee=employee, today=date.today())
 
     @app.route("/employees/<int:employee_id>/edit", methods=["GET", "POST"])
@@ -923,6 +931,8 @@ def create_app(test_config=None):
             )
         page = min(max(request.args.get("page", 1, type=int), 1), 10_000)
         pagination = db.paginate(statement, page=page, per_page=AUDIT_PER_PAGE, error_out=False)
+        audit("view.audit", page=page)
+        db.session.commit()
         return render_template(
             "audit.html",
             pagination=pagination,
