@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 525](https://img.shields.io/badge/tests-525-2546f0?style=flat)](#quality)
+[![Tests: 531](https://img.shields.io/badge/tests-531-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -110,7 +110,7 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-16 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+17 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
@@ -132,7 +132,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 525 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 531 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
@@ -179,7 +179,7 @@ docs/             architecture.md and security.md
 | --- | --- | --- |
 | `SECRET_KEY` | Yes | Signs the session cookie. The app refuses to start without it. |
 | `DATABASE_URL` | No | SQLAlchemy URL. Defaults to SQLite at `instance/employees.db`. |
-| `SESSION_COOKIE_SECURE` | No | Set to `1` wherever the app is served over HTTPS. |
+| `SESSION_COOKIE_SECURE` | No | The session cookie is Secure by default, except in debug and testing runs. Set `0` to turn it off for plain-http local use (`scripts/dev.sh` does), `1` to force it on. |
 | `FLASK_DEBUG` | No | `1` turns on the debugger for `python app.py`. Local use only. |
 
 See [`.env.example`](.env.example). After pulling new code, run

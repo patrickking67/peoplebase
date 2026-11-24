@@ -113,6 +113,11 @@ MIGRATIONS_DIRECTORY = Path(__file__).resolve().parent / "migrations"
 migrate = Migrate()
 
 
+def secure_cookie_setting(value):
+    """Read SESSION_COOKIE_SECURE: "1" forces on, "0" forces off, anything else is automatic."""
+    return {"1": True, "0": False}.get(value)
+
+
 def create_app(test_config=None):
     app = Flask(__name__)
     database_path = Path(app.instance_path) / "employees.db"
@@ -124,8 +129,8 @@ def create_app(test_config=None):
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_HTTPONLY=True,
-        # Set SESSION_COOKIE_SECURE=1 wherever the app is served over HTTPS.
-        SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE") == "1",
+        # None means "decide below": on unless the app is in debug or testing.
+        SESSION_COOKIE_SECURE=secure_cookie_setting(os.environ.get("SESSION_COOKIE_SECURE")),
         PERMANENT_SESSION_LIFETIME=SESSION_LIFETIME,
         # Argon2id cost settings; empty means the argon2-cffi defaults.
         # Tests pass cheaper ones so the suite stays fast.
@@ -135,6 +140,12 @@ def create_app(test_config=None):
 
     if test_config:
         app.config.update(test_config)
+
+    if app.config["SESSION_COOKIE_SECURE"] is None:
+        # Trust boundary: the session cookie is the only credential after
+        # sign-in. Sent over plain HTTP it can be read off the network, so
+        # Secure is the default and only debug and testing runs turn it off.
+        app.config["SESSION_COOKIE_SECURE"] = not (app.debug or app.testing)
 
     if not app.config.get("SECRET_KEY"):
         raise RuntimeError(
