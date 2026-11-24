@@ -62,6 +62,7 @@ earlier entries are reconstructed from the Git history.
 
 ### Changed
 
+- CI also runs the checks on Python 3.14.
 - The project page shows the new modules with new screenshots. The Pages
   workflow builds and deploys in two jobs, which fixes an intermittent
   "Found 0 artifact(s)" failure, and the audit log page says it also records

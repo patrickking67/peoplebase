@@ -137,7 +137,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 | --- | --- |
 | Tests | 706 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
-| CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
+| CI | `./scripts/check.sh` on Python 3.11, 3.12, 3.13 and 3.14 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
 | Security | Every abuse case in [docs/security.md](docs/security.md) has a test; Argon2id passwords; CSRF on every form; CSP without inline script |
 | Migrations | Upgrade and downgrade tested on SQLite in CI and on PostgreSQL 17 locally (`TEST_POSTGRES_URL`) |
