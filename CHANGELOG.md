@@ -9,6 +9,9 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- Job history: a `job_change` table recording each title, department and
+  manager change, shown on the profile. Migration 0006 fills it from the
+  existing compensation history. Abuse case 19.
 - Sensitive reads are audited: another person's record, HR's directory view
   and every audit log view. Abuse case 18.
 - Sign-in with three roles: employee, manager and HR admin. Passwords are
@@ -33,7 +36,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 18 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 19 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people

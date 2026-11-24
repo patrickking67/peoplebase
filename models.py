@@ -79,6 +79,13 @@ class Employee(db.Model):
         order_by="(CompensationChange.effective_date.desc(), CompensationChange.id.desc())",
     )
 
+    job_history = db.relationship(
+        "JobChange",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+        order_by="(JobChange.effective_date.desc(), JobChange.id.desc())",
+    )
+
     time_off_requests = db.relationship(
         "TimeOffRequest",
         back_populates="employee",
@@ -131,6 +138,26 @@ class CompensationChange(db.Model):
     recorded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     employee = db.relationship("Employee", back_populates="compensation_history")
+
+
+class JobChange(db.Model):
+    """One row each time someone's title, department or manager changes.
+
+    Department and manager are kept as names, not links, so the history still
+    reads correctly after a department is renamed or a manager leaves. Rows are
+    only ever added by the app.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    position = db.Column(db.String(100), nullable=False)
+    department_name = db.Column(db.String(100), nullable=False, default="", server_default="")
+    manager_name = db.Column(db.String(100), nullable=False, default="", server_default="")
+    effective_date = db.Column(db.Date, nullable=False)
+    reason = db.Column(db.String(100), nullable=False, default="", server_default="")
+    recorded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    employee = db.relationship("Employee", back_populates="job_history")
 
 
 class ChecklistTask(db.Model):
