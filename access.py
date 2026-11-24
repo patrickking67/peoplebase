@@ -126,6 +126,38 @@ class Access:
         """Kind and pending requests: the person, their managers and HR. Colleagues only see who is out."""
         return self.can_view_profile(employee)
 
+    # Performance reviews
+
+    def is_reviewer_of(self, review):
+        """The direct manager, and only while their account has the manager role."""
+        return self.is_manager and review.employee.manager_id == self.employee_id and self.employee_id is not None
+
+    def can_view_review(self, review):
+        """HR, the person reviewed and their direct manager. Managers further up
+        the line do not read reviews."""
+        return self.is_admin or self.is_self(review.employee) or self.is_reviewer_of(review)
+
+    def can_write_self_review(self, review):
+        return self.is_self(review.employee) and review.cycle.is_open and not review.self_done
+
+    def can_write_manager_review(self, review):
+        """Only the direct manager, once the person has submitted their own, in an open cycle."""
+        return self.is_reviewer_of(review) and review.cycle.is_open and review.self_done and not review.manager_done
+
+    def can_see_self_review(self, review):
+        """What the person wrote: them, HR, and their direct manager once it is submitted."""
+        if not review.self_done:
+            return False
+        return self.is_admin or self.is_self(review.employee) or self.is_reviewer_of(review)
+
+    def can_see_manager_review(self, review):
+        """The manager's write-up: HR and its author always; the person only after HR closes the cycle."""
+        if not review.manager_done:
+            return False
+        if self.is_admin or self.is_reviewer_of(review):
+            return True
+        return self.is_self(review.employee) and not review.cycle.is_open
+
     # Reports
 
     def can_view_reports(self):
