@@ -47,6 +47,9 @@ until HR gives the account the manager role.
 | Performance review: read | Own, manager half after close | Direct reports only | Everyone |
 | Performance review: write | Own self review | Direct reports, after their self review | No |
 | Review cycles: open and close | No | No | Yes |
+| Documents: read | Shared with them | Shared with managers, for reports | Everything |
+| Documents: add | Own, shared with HR only | No | Anyone, any audience |
+| Documents: delete | No | No | Yes |
 | Policies: read and acknowledge for yourself | Yes | Yes | Yes |
 | Policies: publish, see who has not acknowledged | No | No | Yes |
 | Add, edit, delete employees; manage departments | No | No | Yes |
@@ -71,7 +74,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
 `tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
 `tests/test_policies.py` (15, 16), `tests/test_reports.py` (7) and
-`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18) and `tests/test_job_history.py` (19) and `tests/test_checklists.py` (20) and `tests/test_calendar.py` (21) and `tests/test_reviews.py` (22, 23).
+`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18) and `tests/test_job_history.py` (19) and `tests/test_checklists.py` (20) and `tests/test_calendar.py` (21) and `tests/test_reviews.py` (22, 23) and `tests/test_documents.py` (24 to 27).
 
 | # | Abuse case | Control |
 | --- | --- | --- |
@@ -98,6 +101,10 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 | 21 | **Reading another team's leave through the calendar.** Change `month`, add `employee`, `team` or `manager_id` parameters, or read a colleague's sick leave off the shared view. | The set of people on the calendar is worked out on the server from the signed-in account: HR everyone, anyone else themselves, their reports, their manager and the people under that manager. No query parameter widens it. Colleagues see only that someone is out; the kind of leave and pending requests are shown only to the person, their managers and HR. Denied requests never show. A bad `month` falls back to this month. |
 | 22 | **Reading reviews that are not yours.** Open `/reviews/<id>` for a peer, a manager's other team or a skip-level report; read a manager's review before it is released; read a self review before it is submitted. | A review is readable only by the person, their direct manager (while their account has the manager role) and HR. Managers further up the line cannot read it. Anyone else gets the same 404 as a review that does not exist. The manager's half stays hidden from the person until HR closes the cycle, and the person's half stays hidden from the manager until it is submitted. Reading someone else's review writes a `view.review` audit entry. |
 | 23 | **Writing a review you may not write.** Post a self review for a colleague, rewrite yours after seeing the manager's, post the manager half for yourself, as a skip-level manager or as a peer, or send `manager_rating` in the self form. | Each half is written once and never edited. The self half needs the person's own session and an open cycle. The manager half needs the direct manager, a submitted self review and an open cycle. HR cannot write either half. Ratings are 1 to 5 from ASCII digits, text is capped and refuses control characters, and identity and author come from the session, never from a form field. Review text is never written to the audit log. |
+| 24 | **Reading documents that are not shared with you.** Guess `/documents/<id>/download`, read a colleague's contract, or read an HR-only note as the person it is about. | Each document has an audience: HR only, the person and HR, or the person, their managers and HR. The download route loads the record and asks the access module before it opens any file. Anyone outside the audience gets the same 404 as a missing id. Managers read only documents shared with managers, and only for people in their reporting line. Downloads by anyone other than the person are audited. |
+| 25 | **Type spoofing.** Upload HTML, a script, an archive or an executable renamed to `.pdf`, or a real file with a forbidden extension, hoping it is served back and run. | Only PDF, PNG and JPEG are accepted, and both the extension and the first bytes of the file must name the same type. The stored content type comes from the bytes, never from the request. Files are served only as attachments with `nosniff`, and the stored name's extension is chosen by the server. |
+| 26 | **Path tricks in the file name.** Upload `../../x.pdf`, a Windows path or a name with a null byte to write outside the uploads folder or overwrite another file. | The uploaded name is never used on disk. Files are stored under a random 32 character name in `instance/uploads`, which is outside `static/` and gitignored. The original name is cleaned of directories and control characters and kept only as text for display. A download rebuilds the path from the stored name and refuses anything that is not a name the server made. |
+| 27 | **Oversized or endless uploads.** Send a huge body to fill the disk or memory, or from a browser that is not signed in. | The 64 KiB request cap stays on every route. Only the upload route allows 10 MB, and only for a signed-in account. A file over 10 MB is refused with 413, and a record holds at most 50 documents. Nothing is written until every check has passed. |
 
 ## What this does not cover
 
@@ -110,6 +117,9 @@ the server does about it. The tests live in `tests/test_access.py` (cases
   proxy that is the proxy unless the deployment sets up forwarded headers.
 - The lockout can be used to keep a known email locked out. That is the usual
   trade for stopping guessing, and the lock lifts by itself after 15 minutes.
+- Uploaded documents are not scanned for malware and are not encrypted
+  individually. They sit in `instance/uploads` on the host's disk, so encrypt
+  the volume and back it up with the database.
 - Nothing is encrypted at the field level. Use an encrypted database volume
   and TLS at the host.
 - The audit log is append-only inside the app. Someone with direct database

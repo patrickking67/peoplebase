@@ -75,6 +75,14 @@
     {% endif %}
     {% endfor %}
 
+    <section class="panel panel-wide" aria-labelledby="documents-title">
+        <div class="panel-heading">
+            <h2 id="documents-title">Documents</h2>
+            <a href="{{ url_for('view_documents', employee_id=employee.id) }}">Open documents</a>
+        </div>
+        <p class="quiet">Contracts, letters and certificates shared with you.</p>
+    </section>
+
     <section class="panel panel-wide" aria-labelledby="job-title">
         <h2 id="job-title">Job history</h2>
         {% if employee.job_history %}

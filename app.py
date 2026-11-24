@@ -28,6 +28,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -35,11 +36,14 @@ from flask_migrate import Migrate
 from sqlalchemy import inspect
 from werkzeug.exceptions import HTTPException, InternalServerError
 
+import documents as document_files
 from access import Access
 from models import (
     AUDIT_ACTIONS,
     AUDIT_GROUPS,
     CHECKLIST_KINDS,
+    DOCUMENT_AUDIENCES,
+    DOCUMENT_CATEGORIES,
     EMPLOYMENT_STATUSES,
     ROLES,
     TIME_OFF_DECISIONS,
@@ -51,6 +55,7 @@ from models import (
     ChecklistTask,
     CompensationChange,
     Department,
+    Document,
     Employee,
     JobChange,
     LoginThrottle,
@@ -141,10 +146,15 @@ def create_app(test_config=None):
         # Tests pass cheaper ones so the suite stays fast.
         PASSWORD_HASH_OPTIONS={},
         MAX_CONTENT_LENGTH=MAX_CONTENT_LENGTH,
+        # Where uploaded documents are kept: <UPLOAD_ROOT>/uploads. Defaults to the instance folder.
+        UPLOAD_ROOT=os.environ.get("UPLOAD_ROOT"),
     )
 
     if test_config:
         app.config.update(test_config)
+
+    if not app.config["UPLOAD_ROOT"]:
+        app.config["UPLOAD_ROOT"] = app.instance_path
 
     if app.config["SESSION_COOKIE_SECURE"] is None:
         # Trust boundary: the session cookie is the only credential after
@@ -174,6 +184,7 @@ def create_app(test_config=None):
     app.jinja_env.filters["days"] = format_days
     app.jinja_env.globals["checklist_progress"] = checklist_progress
     app.jinja_env.globals["EMPLOYMENT_STATUSES"] = EMPLOYMENT_STATUSES
+    app.jinja_env.globals["DOCUMENT_CATEGORIES"] = DOCUMENT_CATEGORIES
     app.jinja_env.globals["TIME_OFF_KINDS"] = TIME_OFF_KINDS
     app.jinja_env.globals["TIME_OFF_STATUSES"] = TIME_OFF_STATUSES
 
@@ -191,6 +202,13 @@ def create_app(test_config=None):
         g.account = account
         g.access = Access(account)
         return None
+
+    @app.before_request
+    def allow_document_uploads():
+        """The one place a request may be large. Everything else keeps the 64 KiB cap,
+        and nobody who is not signed in gets the larger one."""
+        if request.endpoint == "upload_document" and g.account is not None:
+            request.max_content_length = document_files.MAX_UPLOAD_BYTES + document_files.UPLOAD_OVERHEAD_BYTES
 
     @app.before_request
     def protect_from_csrf():
@@ -621,6 +639,7 @@ def create_app(test_config=None):
             flash("You cannot delete your own record. Ask another HR admin.", "error")
             return redirect(url_for("employee_profile", employee_id=employee.id))
         employee_name = employee.name
+        stored_files = [document.stored_name for document in employee.documents]
         audit("employee.deleted", employee, **employee_snapshot(employee))
         close_account(employee, unlink=True)
         # SQLite does not enforce foreign keys by default, so clear references here.
@@ -633,6 +652,8 @@ def create_app(test_config=None):
         )
         db.session.delete(employee)
         db.session.commit()
+        for stored_name in stored_files:
+            document_files.remove(app.config["UPLOAD_ROOT"], stored_name)
         flash(f"Deleted {employee_name}.", "success")
         return redirect(url_for("view_employees"))
 
@@ -956,6 +977,86 @@ def create_app(test_config=None):
             flash(f"Retired {policy.title}. Its acknowledgements are kept.", "success")
         return redirect(url_for("view_policies"))
 
+    @app.get("/employees/<int:employee_id>/documents")
+    def view_documents(employee_id):
+        employee = db.get_or_404(Employee, employee_id)
+        if not g.access.can_view_profile(employee):
+            abort(404)
+        return render_documents(employee, {})
+
+    @app.post("/employees/<int:employee_id>/documents")
+    def upload_document(employee_id):
+        employee = db.get_or_404(Employee, employee_id)
+        if not g.access.can_view_profile(employee):
+            abort(404)
+        if not g.access.can_upload_document(employee):
+            abort(403, description="Only HR, or the person themselves, can add documents to this record.")
+        values, kind, data, error = validate_document_upload(request, employee, g.access)
+        if error:
+            flash(error, "error")
+            return render_documents(employee, request.form), 400
+        stored_name = document_files.store(app.config["UPLOAD_ROOT"], data, kind)
+        try:
+            document = Document(
+                employee=employee,
+                stored_name=stored_name,
+                content_type=document_files.content_type(kind),
+                size=len(data),
+                uploaded_by=g.account.email,
+                **values,
+            )
+            db.session.add(document)
+            audit(
+                "document.uploaded",
+                document,
+                category=document.category,
+                audience=document.audience,
+                size=document.size,
+                person=employee.name,
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            document_files.remove(app.config["UPLOAD_ROOT"], stored_name)
+            raise
+        flash(f"Added {document.title}.", "success")
+        return redirect(url_for("view_documents", employee_id=employee.id))
+
+    @app.get("/documents/<int:document_id>/download")
+    def download_document(document_id):
+        document = db.get_or_404(Document, document_id)
+        if not g.access.can_read_document(document):
+            # The same answer as a document that does not exist, so ids cannot be probed.
+            abort(404)
+        path = document_files.path_for(app.config["UPLOAD_ROOT"], document.stored_name)
+        if path is None or not path.is_file():
+            abort(404)
+        if not g.access.is_self(document.employee):
+            audit("view.document", document, category=document.category, person=document.employee.name)
+            db.session.commit()
+        return send_file(
+            path,
+            mimetype=document.content_type,
+            as_attachment=True,
+            download_name=document.original_name,
+            max_age=0,
+        )
+
+    @app.post("/documents/<int:document_id>/delete")
+    def delete_document(document_id):
+        document = db.get_or_404(Document, document_id)
+        if not g.access.can_read_document(document):
+            abort(404)
+        if not g.access.can_delete_document(document):
+            abort(403, description="Only HR can delete documents.")
+        employee_id, stored_name, title = document.employee_id, document.stored_name, document.title
+        audit("document.deleted", document, person=document.employee.name)
+        db.session.delete(document)
+        db.session.commit()
+        document_files.remove(app.config["UPLOAD_ROOT"], stored_name)
+        flash(f"Deleted {title}.", "success")
+        return redirect(url_for("view_documents", employee_id=employee_id))
+
     @app.get("/reviews")
     def view_reviews():
         """Own reviews for everyone, reviews to write for a manager, every cycle for HR."""
@@ -1179,6 +1280,7 @@ SUBJECT_TYPES = {
     ChecklistTask: "checklist task",
     ReviewCycle: "review cycle",
     Review: "review",
+    Document: "document",
 }
 
 
@@ -1221,6 +1323,8 @@ def describe_subject(subject):
         return subject.email
     if isinstance(subject, (TimeOffRequest, ChecklistTask)):
         return subject.employee.name
+    if isinstance(subject, Document):
+        return subject.title
     if isinstance(subject, Review):
         return f"{subject.employee.name}, {subject.cycle.name}"
     if isinstance(subject, Policy):
@@ -1300,6 +1404,56 @@ def validate_policy(form):
     if POLICY_CONTROL_CHARACTERS.search(body):
         return None, "Policy text cannot contain control characters."
     return {"title": title, "body": body}, None
+
+
+def render_documents(employee, values):
+    shown = [item for item in employee.documents if g.access.can_read_document(item)]
+    return render_template(
+        "documents.html",
+        employee=employee,
+        documents=shown,
+        values=values,
+        audiences=allowed_audiences(g.access),
+        max_megabytes=document_files.MAX_UPLOAD_BYTES // (1024 * 1024),
+    )
+
+
+def allowed_audiences(access):
+    """HR may share a document with anyone it chooses. A person adding their own
+    document shares it with themselves and HR, nobody else."""
+    if access.is_admin:
+        return DOCUMENT_AUDIENCES
+    return {"employee": DOCUMENT_AUDIENCES["employee"]}
+
+
+def validate_document_upload(req, employee, access):
+    """Return (values, kind, data, error) for an upload form."""
+    form = req.form
+    uploaded = req.files.get("file")
+    if uploaded is None or not uploaded.filename:
+        return None, None, None, "Choose a file to upload."
+    if len(employee.documents) >= document_files.MAX_DOCUMENTS_PER_EMPLOYEE:
+        return None, None, None, f"A record can hold {document_files.MAX_DOCUMENTS_PER_EMPLOYEE} documents."
+    category = form.get("category", "").strip() or "other"
+    if category not in DOCUMENT_CATEGORIES:
+        return None, None, None, "Choose a valid category."
+    audience = form.get("audience", "").strip() or "employee"
+    if audience not in allowed_audiences(access):
+        return None, None, None, "You cannot share a document that way."
+    original_name = document_files.clean_original_name(uploaded.filename)
+    title, error = clean_text(form, "title", "Title", required=False)
+    if error:
+        return None, None, None, error
+    data = uploaded.stream.read(document_files.MAX_UPLOAD_BYTES + 1)
+    kind, error = document_files.check_upload(original_name, data)
+    if error:
+        return None, None, None, error
+    return {
+        "title": title or original_name[:100],
+        "category": category,
+        "audience": audience,
+        "original_name": original_name,
+    }, kind, data, None
 
 
 def validate_review_cycle(form):

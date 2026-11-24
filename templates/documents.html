@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Documents for {{ employee.name }} | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Documents</h1><p class="lede">{{ employee.name }}. {% if access.is_admin %}HR sees every document. Each one is shared with HR only, with the person, or with the person and their managers.{% else %}You see the documents that were shared with you.{% endif %}</p></div>
+    <div class="heading-actions"><a href="{{ url_for('employee_profile', employee_id=employee.id) }}">Back to the profile</a></div>
+</section>
+
+<section class="panel panel-wide" aria-labelledby="doc-list-title">
+    <h2 id="doc-list-title">Files</h2>
+    {% if documents %}
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th scope="col">Title</th><th scope="col">Category</th><th scope="col">Shared with</th><th scope="col">Added</th><th scope="col" class="num">Size</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>
+                {% for item in documents %}
+                <tr>
+                    <td>{{ item.title }}<small>{{ item.original_name }}</small></td>
+                    <td>{{ item.category_label }}</td>
+                    <td>{{ item.audience_label }}</td>
+                    <td><time datetime="{{ item.uploaded_at.isoformat() }}">{{ item.uploaded_at.strftime('%Y-%m-%d') }}</time><small>{{ item.uploaded_by }}</small></td>
+                    <td class="num">{{ (item.size / 1024)|round(1) }} KB</td>
+                    <td>
+                        <a href="{{ url_for('download_document', document_id=item.id) }}">Download<span class="visually-hidden"> {{ item.title }}</span></a>
+                        {% if access.can_delete_document(item) %}
+                        <form method="post" action="{{ url_for('delete_document', document_id=item.id) }}" data-confirm="Delete {{ item.title }}? The file is removed and cannot be recovered.">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="link-button link-danger" type="submit">Delete<span class="visually-hidden"> {{ item.title }}</span></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="quiet">No documents shared with you yet.</p>
+    {% endif %}
+</section>
+
+{% if access.can_upload_document(employee) %}
+<section class="form-layout" aria-labelledby="doc-upload-title">
+    <header><h2 id="doc-upload-title">Add a document</h2><p>PDF, PNG or JPEG, up to {{ max_megabytes }} MB. The file type is checked from its contents, not only its name.</p></header>
+    <form method="post" action="{{ url_for('upload_document', employee_id=employee.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+            <legend>Document</legend>
+            <label for="file">File</label>
+            <input type="file" name="file" id="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" required>
+            <label for="title">Title</label>
+            <input type="text" name="title" id="title" value="{{ values.get('title', '') }}" maxlength="100" placeholder="Defaults to the file name">
+            <label for="category">Category</label>
+            <select name="category" id="category">
+                {% for key, label in DOCUMENT_CATEGORIES.items() %}<option value="{{ key }}"{% if values.get('category') == key %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <label for="audience">Shared with</label>
+            <select name="audience" id="audience">
+                {% for key, label in audiences.items() %}<option value="{{ key }}"{% if values.get('audience') == key %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </fieldset>
+        <div class="form-actions"><button class="button" type="submit">Upload</button></div>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

@@ -19,6 +19,7 @@ def app(tmp_path):
             "SECRET_KEY": "test-only-secret",
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'test.db'}",
             "PASSWORD_HASH_OPTIONS": FAST_HASHING,
+            "UPLOAD_ROOT": str(tmp_path / "files"),
         }
     )
 

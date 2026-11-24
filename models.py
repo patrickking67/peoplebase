@@ -53,6 +53,19 @@ CHECKLIST_PLAN = {
     "Accounts and access removed": ("hr", 0),
     "Final pay and unused leave settled": ("hr", 7),
 }
+DOCUMENT_CATEGORIES = {
+    "contract": "Contract",
+    "offer": "Offer letter",
+    "identity": "Identity check",
+    "certificate": "Certificate",
+    "other": "Other",
+}
+# Who may read a document, beyond HR who may read all of them.
+DOCUMENT_AUDIENCES = {
+    "hr": "HR only",
+    "employee": "The person and HR",
+    "manager": "The person, their managers and HR",
+}
 TIME_OFF_KINDS = {"vacation": "Vacation", "sick": "Sick leave", "personal": "Personal"}
 TIME_OFF_STATUSES = {"pending": "Pending", "approved": "Approved", "denied": "Denied"}
 TIME_OFF_DECISIONS = {"approve": "approved", "deny": "denied"}
@@ -121,6 +134,9 @@ class Employee(db.Model):
     )
 
     reviews = db.relationship("Review", back_populates="employee", cascade="all, delete-orphan")
+    documents = db.relationship(
+        "Document", back_populates="employee", cascade="all, delete-orphan", order_by="Document.uploaded_at.desc()"
+    )
 
     @property
     def status_label(self):
@@ -289,6 +305,33 @@ class Review(db.Model):
         return "Waiting for self review"
 
 
+class Document(db.Model):
+    """A file kept on someone's record. The file itself lives outside the
+    database under a random name; the name the uploader gave is only text."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    title = db.Column(db.String(100), nullable=False)
+    category = db.Column(db.String(20), nullable=False)
+    audience = db.Column(db.String(20), nullable=False)
+    original_name = db.Column(db.String(150), nullable=False)
+    content_type = db.Column(db.String(40), nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    stored_name = db.Column(db.String(40), nullable=False, unique=True)
+    uploaded_by = db.Column(db.String(254), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    employee = db.relationship("Employee", back_populates="documents")
+
+    @property
+    def category_label(self):
+        return DOCUMENT_CATEGORIES.get(self.category, self.category)
+
+    @property
+    def audience_label(self):
+        return DOCUMENT_AUDIENCES.get(self.audience, self.audience)
+
+
 class Policy(db.Model):
     """A policy people must acknowledge. The text never changes after it is
     published: a revision is a new row that replaces this one, so every
@@ -442,6 +485,8 @@ AUDIT_ACTIONS = {
     "review.cycle_closed": "Closed review cycle",
     "review.self_submitted": "Submitted self review",
     "review.manager_submitted": "Submitted manager review",
+    "document.uploaded": "Uploaded document",
+    "document.deleted": "Deleted document",
     "policy.published": "Published policy",
     "policy.revised": "Revised policy",
     "policy.retired": "Retired policy",
@@ -450,6 +495,7 @@ AUDIT_ACTIONS = {
     "view.directory": "Viewed directory with pay",
     "view.audit": "Viewed audit log",
     "view.review": "Viewed review",
+    "view.document": "Downloaded document",
     "export.directory_csv": "Exported directory CSV",
     "export.headcount_csv": "Exported headcount report CSV",
 }
@@ -463,6 +509,7 @@ AUDIT_GROUPS = {
     "checklist": "Onboarding and offboarding",
     "policy": "Policies",
     "review": "Performance reviews",
+    "document": "Documents",
     "export": "Exports",
     "view": "Sensitive views",
 }
