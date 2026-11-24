@@ -1853,6 +1853,7 @@ def seed_demo_data(today):
         employee.compensation_history.append(
             CompensationChange(position=title, salary=Decimal(salary), effective_date=start, reason="Hired")
         )
+        employee.job_history.append(job_change_for(employee, start, "Hired"))
         people[name] = employee
         db.session.add(employee)
 
@@ -1883,6 +1884,8 @@ def seed_demo_data(today):
             position="Senior Engineer", salary=Decimal("152000"), effective_date=raise_on, reason="Promotion"
         )
     )
+    jordan.job_history[0].position = "Engineer"
+    jordan.job_history.append(job_change_for(jordan, raise_on, "Promotion"))
 
     requests = [
         ("Casey Example", "vacation", -1, 3, "approved", "Riley Example"),
