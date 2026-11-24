@@ -85,6 +85,14 @@ class Access:
         """Tick onboarding and offboarding tasks: HR, or a manager for their reports."""
         return self.is_admin or self.manages(employee)
 
+    def can_update_task(self, task, done):
+        """HR and the managers above a person may tick or reopen any of their
+        tasks. A person may tick, never reopen, a task that is theirs to do."""
+        employee = task.employee
+        if self.can_update_checklist(employee):
+            return True
+        return self.is_self(employee) and task.owner == "employee" and done
+
     # Time off
 
     def can_request_time_off_for(self, employee):

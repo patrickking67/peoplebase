@@ -6,7 +6,7 @@ without importing the Flask routes.
 
 import json
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
@@ -37,6 +37,21 @@ CHECKLIST_TEMPLATES = {
         "Accounts and access removed",
         "Final pay and unused leave settled",
     ],
+}
+# Who is responsible for each standard task, and its due date as days from the
+# start date (onboarding) or the last day (offboarding). Negative is before.
+CHECKLIST_OWNERS = {"hr": "HR", "manager": "Manager", "employee": "Employee"}
+CHECKLIST_PLAN = {
+    "Signed contract on file": ("hr", -5),
+    "Payroll and tax details collected": ("employee", 2),
+    "Laptop and accounts ready": ("hr", -1),
+    "PeopleBase account created": ("hr", 0),
+    "First-week plan agreed with their manager": ("manager", 3),
+    "Last working day confirmed in writing": ("manager", -14),
+    "Handover notes written": ("employee", -5),
+    "Laptop and badge returned": ("employee", 0),
+    "Accounts and access removed": ("hr", 0),
+    "Final pay and unused leave settled": ("hr", 7),
 }
 TIME_OFF_KINDS = {"vacation": "Vacation", "sick": "Sick leave", "personal": "Personal"}
 TIME_OFF_STATUSES = {"pending": "Pending", "approved": "Approved", "denied": "Denied"}
@@ -119,8 +134,13 @@ class Employee(db.Model):
     def start_checklist(self, kind):
         """Give the employee the standard tasks for kind, unless they have them."""
         if not self.checklist(kind):
+            anchor = self.start_date if kind == "onboarding" else self.end_date
             for position, title in enumerate(CHECKLIST_TEMPLATES[kind], start=1):
-                self.checklist_tasks.append(ChecklistTask(kind=kind, title=title, position=position))
+                owner, offset = CHECKLIST_PLAN.get(title, ("hr", 0))
+                due = anchor + timedelta(days=offset) if anchor else None
+                self.checklist_tasks.append(
+                    ChecklistTask(kind=kind, title=title, position=position, owner=owner, due_date=due)
+                )
 
     def __repr__(self):
         return f"<Employee {self.name}>"
@@ -168,6 +188,9 @@ class ChecklistTask(db.Model):
     kind = db.Column(db.String(20), nullable=False)
     title = db.Column(db.String(120), nullable=False)
     position = db.Column(db.Integer, nullable=False)
+    # Who is responsible: "hr", "manager" or "employee". See CHECKLIST_OWNERS.
+    owner = db.Column(db.String(20), nullable=False, default="hr", server_default="hr")
+    due_date = db.Column(db.Date, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     # The email of whoever ticked it, kept as text so it survives account changes.
     completed_by = db.Column(db.String(254), nullable=True)
@@ -181,6 +204,13 @@ class ChecklistTask(db.Model):
     @property
     def kind_label(self):
         return CHECKLIST_KINDS.get(self.kind, self.kind)
+
+    @property
+    def owner_label(self):
+        return CHECKLIST_OWNERS.get(self.owner, self.owner)
+
+    def is_overdue(self, today):
+        return not self.done and self.due_date is not None and self.due_date < today
 
 
 def checklist_progress(tasks):

@@ -781,16 +781,16 @@ def create_app(test_config=None):
                 tasks = employee.checklist(kind)
                 if any(not task.done for task in tasks):
                     rows.append({"employee": employee, "kind": kind, "tasks": tasks})
-        return render_template("checklists.html", rows=rows)
+        return render_template("checklists.html", rows=rows, today=date.today())
 
     @app.post("/checklists/<int:task_id>")
     def update_checklist_task(task_id):
         task = db.get_or_404(ChecklistTask, task_id)
         if not g.access.can_view_profile(task.employee):
             abort(404)
-        if not g.access.can_update_checklist(task.employee):
-            abort(403, description="Only this person's managers or HR can update their checklist.")
         done = request.form.get("done") == "1"
+        if not g.access.can_update_task(task, done):
+            abort(403, description="Only this person's managers or HR can update this task.")
         if done != task.done:
             task.completed_at = utcnow() if done else None
             task.completed_by = g.account.email if done else None

@@ -17,6 +17,7 @@
                 <li class="task-open">
                     <span class="task-mark" aria-hidden="true"></span>
                     <span class="task-title">{{ task.title }}</span>
+                    <small>{{ task.owner_label }}{% if task.due_date %}, due <time datetime="{{ task.due_date.isoformat() }}">{{ task.due_date.isoformat() }}</time>{% if task.is_overdue(today) %} <strong class="overdue">overdue</strong>{% endif %}{% endif %}</small>
                     <form method="post" action="{{ url_for('update_checklist_task', task_id=task.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="done" value="1">
