@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 705](https://img.shields.io/badge/tests-705-2546f0?style=flat)](#quality)
+[![Tests: 706](https://img.shields.io/badge/tests-706-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -17,8 +17,9 @@
 </div>
 
 PeopleBase is a Flask and SQLAlchemy HRIS (human resources information system)
-for a small company: people records, pay history, time off with approval,
-onboarding checklists, policy sign-off, a headcount report and an audit log.
+for a small company: people records with job history, pay history, time off
+with approval and a team calendar, onboarding checklists, performance reviews,
+documents, policy sign-off, a headcount report and an audit log.
 HR, managers and employees each sign in and see only what their role and
 reporting line allow.
 
@@ -134,7 +135,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 705 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 706 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |

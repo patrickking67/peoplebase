@@ -2295,6 +2295,7 @@ def seed_demo_data(today):
             )
         )
         accounts += 1
+    add_demo_documents(people)
     db.session.commit()
     return {
         "employees": len(people),
@@ -2304,6 +2305,38 @@ def seed_demo_data(today):
         "password": password,
         "sign_ins": [(role, demo_email(name), name) for role, name in DEMO_SIGN_INS],
     }
+
+
+# A tiny but valid PDF, so the demo documents open in any viewer.
+DEMO_PDF = (
+    b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+    b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+    b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] >>\nendobj\n"
+    b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+)
+
+
+def add_demo_documents(people):
+    """Three made-up placeholder files on Casey's record, one for each audience."""
+    casey = people["Casey Example"]
+    for title, category, audience in (
+        ("Employment contract", "contract", "manager"),
+        ("Offer letter", "offer", "employee"),
+        ("Probation review notes", "other", "hr"),
+    ):
+        stored_name = document_files.store(current_app.config["UPLOAD_ROOT"], DEMO_PDF, "pdf")
+        casey.documents.append(
+            Document(
+                title=title,
+                category=category,
+                audience=audience,
+                original_name=f"{title.lower().replace(' ', '-')}.pdf",
+                content_type="application/pdf",
+                size=len(DEMO_PDF),
+                stored_name=stored_name,
+                uploaded_by=demo_email(DEMO_ADMIN),
+            )
+        )
 
 
 def demo_email(name):

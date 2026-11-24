@@ -7,6 +7,7 @@
     <div class="heading-actions"><a href="{{ url_for('view_reviews') }}">All reviews</a></div>
 </section>
 
+<div class="stack">
 <section class="panel panel-wide" aria-labelledby="self-title">
     <h2 id="self-title">Self review</h2>
     {% if access.can_write_self_review(review) %}
@@ -54,4 +55,5 @@
     <p class="quiet">{% if review.employee.manager %}Waiting for {{ review.employee.manager.name }}{% if not review.self_done %}, after the self review{% endif %}.{% else %}This person has no manager, so there is no manager review.{% endif %}</p>
     {% endif %}
 </section>
+</div>
 {% endblock %}

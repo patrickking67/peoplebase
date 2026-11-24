@@ -1,6 +1,6 @@
 # PeopleBase
 
-> PeopleBase is a small open source HRIS (human resources information system) built with Flask and SQLAlchemy. Employees, managers and HR admins sign in and see only what their role and reporting line allow: employees their own record, pay and time off; managers their direct and indirect reports without pay; HR everything. It covers people records, compensation history, time off with approval and leave balances, onboarding and offboarding checklists, policy acknowledgements, a headcount and attrition report and an append-only audit log. Passwords use Argon2id, the schema is managed by Alembic migrations, and the suite has 705 tests. It is a portfolio project, not a hosted product.
+> PeopleBase is a small open source HRIS (human resources information system) built with Flask and SQLAlchemy. Employees, managers and HR admins sign in and see only what their role and reporting line allow: employees their own record, pay and time off; managers their direct and indirect reports without pay; HR everything. It covers people records with job history, compensation history, time off with approval, leave balances and a team calendar, onboarding and offboarding checklists with owners and due dates, performance review cycles, role-scoped employee documents, policy acknowledgements, a headcount and attrition report, and an append-only audit log that also records sensitive reads. Passwords use Argon2id, the schema is managed by Alembic migrations, and the suite has 706 tests. It is a portfolio project, not a hosted product.
 
 ## Docs
 

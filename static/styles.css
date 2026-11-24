@@ -643,14 +643,14 @@ div.org-node:hover { border-color: var(--line); }
 .checklist { margin: 0; padding: 0; list-style: none; }
 .checklist li {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
     align-items: center;
     gap: 4px 12px;
     padding: 10px 0;
     border-bottom: 1px solid var(--line);
 }
 .checklist li:last-child { border-bottom: 0; padding-bottom: 0; }
-.checklist form { margin: 0; }
+.checklist form { margin: 0; grid-column: -2 / -1; }
 .checklist small { color: var(--muted); font-size: 0.8125rem; }
 .checklist .overdue { color: var(--danger); }
 .task-mark {
@@ -666,7 +666,7 @@ div.org-node:hover { border-color: var(--line); }
 }
 .task-done .task-title { color: var(--muted); }
 .checklist-compact { margin-top: 8px; }
-.checklist-compact li { grid-template-columns: auto minmax(0, 1fr) auto; padding: 6px 0; border: 0; }
+.checklist-compact li { grid-template-columns: auto minmax(0, 1fr) auto auto; padding: 6px 0; border: 0; }
 
 @media (max-width: 760px) {
     .checklist li { grid-template-columns: auto minmax(0, 1fr); }
