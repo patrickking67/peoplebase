@@ -5,6 +5,7 @@
     <div><h1>Time off</h1><p class="lede">{% if access.is_admin %}Every request in the company. HR can decide any of them except their own.{% elif access.is_manager %}Your own requests and those of everyone who reports up to you. You decide theirs; your manager or HR decides yours.{% else %}Your requests. Your manager or HR approves or denies them.{% endif %}</p></div>
     <div class="heading-actions"><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></div>
 </section>
+<p class="quiet"><a href="{{ url_for('time_off_calendar') }}">Open the team calendar</a></p>
 <nav class="tabs" aria-label="Filter requests by status">
     <a href="{{ url_for('view_time_off') }}"{% if not selected_status %} aria-current="page"{% endif %}>All</a>
     {% for key, label in TIME_OFF_STATUSES.items() %}

@@ -105,6 +105,27 @@ class Access:
             return False
         return self.is_admin or time_off.employee_id in self.reports
 
+    def team_calendar_ids(self):
+        """Ids whose time off shows on the team calendar. None means everyone.
+
+        HR sees everyone. Anyone else sees themselves, the people who report to
+        them, their own manager and the other people under that manager.
+        """
+        if self.is_admin:
+            return None
+        ids = set(self.reports)
+        if self.employee_id is not None:
+            ids.add(self.employee_id)
+            manager_id = db.session.scalar(db.select(Employee.manager_id).where(Employee.id == self.employee_id))
+            if manager_id is not None:
+                ids.add(manager_id)
+                ids.update(db.session.scalars(db.select(Employee.id).where(Employee.manager_id == manager_id)))
+        return frozenset(ids)
+
+    def can_see_leave_details(self, employee):
+        """Kind and pending requests: the person, their managers and HR. Colleagues only see who is out."""
+        return self.can_view_profile(employee)
+
     # Reports
 
     def can_view_reports(self):

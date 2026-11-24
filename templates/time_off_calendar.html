@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Team calendar | PeopleBase{% endblock %}
+{% block content %}
+<section class="page-heading">
+    <div><h1>Team calendar</h1><p class="lede">{% if everyone %}Approved and pending time off across the company.{% else %}Time off for you, your reports, your manager and the people who share your manager. Colleagues show as out without the kind of leave.{% endif %}</p></div>
+    <div class="heading-actions"><a class="button" href="{{ url_for('request_time_off') }}">Request time off</a></div>
+</section>
+<nav class="tabs" aria-label="Time off views">
+    <a href="{{ url_for('view_time_off') }}">Requests</a>
+    <a href="{{ url_for('time_off_calendar') }}" aria-current="page">Calendar</a>
+</nav>
+<section class="calendar-bar" aria-label="Month">
+    <a href="{{ url_for('time_off_calendar', month=previous_month) }}">Previous month</a>
+    <h2>{{ first.strftime('%B %Y') }}</h2>
+    <a href="{{ url_for('time_off_calendar', month=next_month) }}">Next month</a>
+</section>
+<table class="calendar">
+    <caption class="visually-hidden">Who is out each day in {{ first.strftime('%B %Y') }}</caption>
+    <thead>
+        <tr>{% for name in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}<th scope="col"><span class="visually-hidden">{{ name }}</span><span aria-hidden="true">{{ name[:3] }}</span></th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+        {% for week in weeks %}
+        <tr>
+            {% for day in week %}
+            {% set out = days.get(day, []) %}
+            <td class="{{ 'calendar-outside' if day.month != first.month }}{{ ' calendar-today' if day == today }}{{ ' calendar-empty' if not out }}">
+                <time datetime="{{ day.isoformat() }}">{{ day.day }}</time>
+                {% if out %}
+                <ul>
+                    {% for person in out %}
+                    <li class="{{ 'is-pending' if person.pending }}">{% if person.id %}<a href="{{ url_for('employee_profile', employee_id=person.id) }}">{{ person.name }}</a>{% else %}{{ person.name }}{% endif %}{% if person.kind %} <small>{{ person.kind }}{% if person.pending %}, pending{% endif %}</small>{% endif %}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
