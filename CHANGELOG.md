@@ -62,6 +62,12 @@ earlier entries are reconstructed from the Git history.
 
 ### Changed
 
+- The project page shows the new modules with new screenshots. The Pages
+  workflow builds and deploys in two jobs, which fixes an intermittent
+  "Found 0 artifact(s)" failure, and the audit log page says it also records
+  who looked at a record.
+- Seeded demo data includes an open review cycle and three placeholder
+  documents.
 - The session cookie is `Secure` by default. Debug and testing runs and
   `SESSION_COOKIE_SECURE=0` turn it off; `scripts/dev.sh` sets that for local
   http.
