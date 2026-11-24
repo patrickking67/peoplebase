@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 552](https://img.shields.io/badge/tests-552-2546f0?style=flat)](#quality)
+[![Tests: 564](https://img.shields.io/badge/tests-564-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -112,11 +112,11 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-19 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+20 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
-| Employee | Own record, pay, leave balances, checklist; the directory and org chart | Own time-off requests, own policy acknowledgements, own password |
+| Employee | Own record, pay, leave balances, checklist; the directory and org chart | Own time-off requests, own policy acknowledgements, own password, checklist tasks they own |
 | Manager | The same, plus records, time off and checklists of direct and indirect reports. Not their pay. | Approve or deny reports' time off, tick their checklist tasks |
 | HR admin | Everything, including pay, people who left, reports and the audit log | Records, departments, accounts and roles, policies |
 
@@ -134,7 +134,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 552 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 564 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
@@ -152,6 +152,8 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 - **Time off.** Requests, approval by anyone above in the reporting line or
   HR, and balances per leave type with monthly accrual ([`leave.py`](leave.py)).
 - **Onboarding and offboarding.** A checklist per new hire and per leaver.
+  Each task has an owner (HR, manager or employee) and a due date counted from
+  the start date or last day, and overdue tasks are flagged.
   Marking someone as left records their last day and turns off their account.
 - **Policies.** Immutable published text; everyone acknowledges for
   themselves and a revision asks again.
