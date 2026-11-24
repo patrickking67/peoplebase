@@ -16,6 +16,8 @@ flowchart LR
     RT -->|"may this account...?"| AC["access.py: roles and reach"]
     RT --> LV["leave.py: accrual and balances"]
     RT --> RP["reports.py: headcount and attrition"]
+    RT --> DF["documents.py: upload checks and file storage"]
+    DF --> FS[("instance/uploads")]
     RT --> M["models.py: SQLAlchemy models, audit guard"]
     AC --> M
     M --> DB[("SQLite or PostgreSQL")]
@@ -38,6 +40,7 @@ erDiagram
     EMPLOYEE ||--o| ACCOUNT : "signs in as"
     EMPLOYEE ||--o{ COMPENSATION_CHANGE : "pay history"
     EMPLOYEE ||--o{ JOB_CHANGE : "job history"
+    EMPLOYEE ||--o{ DOCUMENT : "has"
     EMPLOYEE ||--o{ TIME_OFF_REQUEST : requests
     EMPLOYEE ||--o{ CHECKLIST_TASK : "on and offboarding"
     EMPLOYEE ||--o{ ACKNOWLEDGEMENT : signs
@@ -82,6 +85,16 @@ erDiagram
         string manager_name
         date effective_date
         string reason
+    }
+    DOCUMENT {
+        int id PK
+        int employee_id FK
+        string title
+        string category
+        string audience
+        string original_name
+        string stored_name UK
+        int size
     }
     TIME_OFF_REQUEST {
         int id PK
@@ -303,7 +316,18 @@ of the suite builds its schema straight from the models for speed.
 
 `SECRET_KEY` must be set; the factory raises at startup without it. SQLite at
 `instance/employees.db` is the default and `DATABASE_URL` points SQLAlchemy at
-any other database. The session cookie is Secure unless the app runs in debug or testing, or `SESSION_COOKIE_SECURE=0` is set.
+any other database. `UPLOAD_ROOT` moves the `uploads` folder for documents. The session cookie is Secure unless the app runs in debug or testing, or `SESSION_COOKIE_SECURE=0` is set.
+
+## Documents
+
+A document is a row plus a file. The row holds the title, category, audience
+and the name the uploader gave; the file lives in `<UPLOAD_ROOT>/uploads`
+under a random name that only the server chooses. An upload is accepted when
+the extension and the first bytes of the file agree on PDF, PNG or JPEG and the
+size is at most 10 MB. The row is written after the file, and the file is
+removed if the commit fails. A download loads the row, asks `access.py`, and
+sends the file as an attachment with `nosniff`. Deleting a document or an
+employee removes the files after the commit.
 
 ## Production gaps
 

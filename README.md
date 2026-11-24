@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 633](https://img.shields.io/badge/tests-633-2546f0?style=flat)](#quality)
+[![Tests: 705](https://img.shields.io/badge/tests-705-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -112,11 +112,11 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-23 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+27 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
-| Employee | Own record, pay, leave balances, checklist, reviews; the directory and org chart | Own time-off requests, own policy acknowledgements, own password, checklist tasks they own, own self review |
+| Employee | Own record, pay, leave balances, checklist, reviews, documents shared with them; the directory and org chart | Own time-off requests, own policy acknowledgements, own password, checklist tasks they own, own self review |
 | Manager | The same, plus records, time off and checklists of direct and indirect reports. Not their pay. | Approve or deny reports' time off, tick their checklist tasks, write direct reports' reviews |
 | HR admin | Everything, including pay, people who left, reports, reviews and the audit log | Records, departments, accounts and roles, policies, review cycles |
 
@@ -134,7 +134,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 633 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 705 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
@@ -158,6 +158,10 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 - **Performance reviews.** Review cycles opened by HR: a self review, then the
   direct manager's review, released to the person when HR closes the cycle.
   Each half is written once. Skip-level managers do not read them.
+- **Documents.** PDF, PNG and JPEG files on a person's record, up to 10 MB,
+  each shared with HR only, the person, or the person and their managers.
+  Types are checked from the file's bytes, files are stored under random names
+  outside `static/`, and downloads go through an access check and are audited.
 - **Policies.** Immutable published text; everyone acknowledges for
   themselves and a revision asks again.
 - **Reports.** Twelve months of headcount, hires, leavers and attrition
@@ -187,6 +191,7 @@ docs/             architecture.md and security.md
 | --- | --- | --- |
 | `SECRET_KEY` | Yes | Signs the session cookie. The app refuses to start without it. |
 | `DATABASE_URL` | No | SQLAlchemy URL. Defaults to SQLite at `instance/employees.db`. |
+| `UPLOAD_ROOT` | No | Folder that holds uploaded documents, in an `uploads` subfolder. Defaults to the instance folder. Keep it outside `static/` and back it up with the database. |
 | `SESSION_COOKIE_SECURE` | No | The session cookie is Secure by default, except in debug and testing runs. Set `0` to turn it off for plain-http local use (`scripts/dev.sh` does), `1` to force it on. |
 | `FLASK_DEBUG` | No | `1` turns on the debugger for `python app.py`. Local use only. |
 

@@ -20,6 +20,7 @@ server-rendered Jinja, SQLite by default. A static project page lives in
 | `app.py` | `create_app()`, the `before_request` gates, every route, validation helpers, `audit()`, the `seed-demo` and `create-admin` commands |
 | `access.py` | `Access`: the only place that decides what a role may see or do. `reporting_tree()` |
 | `models.py` | Models, constants, checklist templates, the audit action registry and the hooks that make `AuditEvent` append-only |
+| `documents.py` | Upload checks (extension plus magic bytes, size) and storage under random names in `instance/uploads`. No Flask or database imports |
 | `leave.py`, `reports.py` | Pure functions for leave balances and for headcount and attrition. No Flask or database imports |
 | `migrations/` | Alembic environment and `versions/000N_*.py` |
 | `templates/` | Jinja. `base.html` is the layout; partials start with `_` |
@@ -112,6 +113,9 @@ database whose name contains `test`; the tests empty it.
   security headers, `no-store`, the request size limit or the required
   `SECRET_KEY`. Do not add a default `SECRET_KEY` or a default account.
 - Do not add a code path that updates or deletes `AuditEvent` rows.
+- Uploads: never use an uploaded name on disk, never store or serve them from
+  `static/`, keep the PDF, PNG and JPEG allowlist with its magic-byte check, and
+  serve files only through `download_document` as attachments.
 - Read `docs/security.md` before touching `access.py` or anything in the
   sign-in flow, and add a test for any new abuse case.
 - Do not edit `LICENSE`, repository settings or the Pages workflow's

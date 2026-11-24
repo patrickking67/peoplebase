@@ -9,6 +9,11 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- Employee documents: PDF, PNG and JPEG up to 10 MB on a person's record, each
+  shared with HR only, the person, or the person and their managers. Content
+  type is checked from the bytes, files are stored under random names outside
+  `static/`, and downloads are access checked and audited. `UPLOAD_ROOT`
+  moves the folder. Migration 0009. Abuse cases 24 to 27.
 - Performance review cycles: HR opens a cycle, each person writes a self
   review, their direct manager writes a review, and HR closes the cycle to
   release the manager review. Reading another person's review is audited.
@@ -45,7 +50,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 23 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 27 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people

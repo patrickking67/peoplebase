@@ -1,11 +1,11 @@
 # PeopleBase
 
-> PeopleBase is a small open source HRIS (human resources information system) built with Flask and SQLAlchemy. Employees, managers and HR admins sign in and see only what their role and reporting line allow: employees their own record, pay and time off; managers their direct and indirect reports without pay; HR everything. It covers people records, compensation history, time off with approval and leave balances, onboarding and offboarding checklists, policy acknowledgements, a headcount and attrition report and an append-only audit log. Passwords use Argon2id, the schema is managed by Alembic migrations, and the suite has 633 tests. It is a portfolio project, not a hosted product.
+> PeopleBase is a small open source HRIS (human resources information system) built with Flask and SQLAlchemy. Employees, managers and HR admins sign in and see only what their role and reporting line allow: employees their own record, pay and time off; managers their direct and indirect reports without pay; HR everything. It covers people records, compensation history, time off with approval and leave balances, onboarding and offboarding checklists, policy acknowledgements, a headcount and attrition report and an append-only audit log. Passwords use Argon2id, the schema is managed by Alembic migrations, and the suite has 705 tests. It is a portfolio project, not a hosted product.
 
 ## Docs
 
 - [README](https://github.com/patrickking67/peoplebase/blob/main/README.md): overview, quickstart, diagrams, quality signals and configuration
-- [Security model](https://github.com/patrickking67/peoplebase/blob/main/docs/security.md): trust boundaries, roles, access rules, 23 abuse cases and known limits
+- [Security model](https://github.com/patrickking67/peoplebase/blob/main/docs/security.md): trust boundaries, roles, access rules, 27 abuse cases and known limits
 - [Architecture](https://github.com/patrickking67/peoplebase/blob/main/docs/architecture.md): components, data model, permission flow, audit log and migrations
 - [Agent guide](https://github.com/patrickking67/peoplebase/blob/main/AGENTS.md): layout, exact commands, conventions and definition of done
 - [Security policy](https://github.com/patrickking67/peoplebase/blob/main/SECURITY.md): private reporting, scope and deployment notes
