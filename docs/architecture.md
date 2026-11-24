@@ -273,7 +273,7 @@ of the suite builds its schema straight from the models for speed.
 
 `SECRET_KEY` must be set; the factory raises at startup without it. SQLite at
 `instance/employees.db` is the default and `DATABASE_URL` points SQLAlchemy at
-any other database. `SESSION_COOKIE_SECURE=1` marks the session cookie Secure.
+any other database. The session cookie is Secure unless the app runs in debug or testing, or `SESSION_COOKIE_SECURE=0` is set.
 
 ## Production gaps
 

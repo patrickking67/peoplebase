@@ -31,7 +31,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 16 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 17 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people
@@ -43,6 +43,9 @@ earlier entries are reconstructed from the Git history.
 
 ### Changed
 
+- The session cookie is `Secure` by default. Debug and testing runs and
+  `SESSION_COOKIE_SECURE=0` turn it off; `scripts/dev.sh` sets that for local
+  http.
 - Time off is decided by the signed-in account. The form no longer names an
   approver, and anyone above the requester in the reporting line, or HR, can
   decide.

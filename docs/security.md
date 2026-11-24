@@ -65,7 +65,8 @@ Each row is something an attacker or a curious colleague might try, and what
 the server does about it. The tests live in `tests/test_access.py` (cases
 1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
 `tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
-`tests/test_policies.py` (15, 16) and `tests/test_reports.py` (7).
+`tests/test_policies.py` (15, 16), `tests/test_reports.py` (7) and
+`tests/test_security.py` (17).
 
 | # | Abuse case | Control |
 | --- | --- | --- |
@@ -85,6 +86,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 | 14 | **Access after leaving.** A former employee keeps using their account. | Setting a record to "left" deactivates the linked account in the same transaction, and every request rechecks that the account is active. |
 | 15 | **Acting for someone else.** Acknowledge a policy or request leave in a colleague's name. | Acknowledgements and non-HR leave requests are always recorded against the signed-in person's own record. |
 | 16 | **Script injection in stored text.** Put markup in a name, note or policy body. | Jinja autoescaping everywhere, policy text is shown as plain text, and the Content-Security-Policy forbids inline script. |
+| 17 | **Cookie sniffing over plain HTTP.** Read the session cookie off a network path because it was sent without TLS. | The session cookie is `Secure` by default, `HttpOnly` and `SameSite=Lax`. Only debug and testing runs, or an explicit `SESSION_COOKIE_SECURE=0`, turn `Secure` off. |
 
 ## What this does not cover
 

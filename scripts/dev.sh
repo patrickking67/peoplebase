@@ -11,6 +11,8 @@ if [ ! -x .venv/bin/flask ]; then
   exit 1
 fi
 export SECRET_KEY="${SECRET_KEY:-dev-only-not-secret}"
+# Local http has no TLS; the Secure cookie flag (on by default) would block sign-in in some browsers.
+export SESSION_COOKIE_SECURE="${SESSION_COOKIE_SECURE:-0}"
 # Safe to run every time: it only applies revisions the database does not have.
 .venv/bin/flask --app app db upgrade
 if [ "${1:-}" = "--demo" ]; then

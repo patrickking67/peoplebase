@@ -160,3 +160,43 @@ def test_oversized_request_body_is_rejected(client, app, csrf_token):
     assert response.status_code == 413
     with app.app_context():
         assert db.session.scalar(db.select(db.func.count(Employee.id))) == 1
+
+
+# Session cookie flags
+
+
+def _cookie_app(tmp_path, **config):
+    return create_app(
+        {
+            "SECRET_KEY": "test-only-secret",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'cookie.db'}",
+            **config,
+        }
+    )
+
+
+def test_session_cookie_is_secure_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+    app = _cookie_app(tmp_path)
+    assert app.config["SESSION_COOKIE_SECURE"] is True
+    assert app.config["SESSION_COOKIE_HTTPONLY"] is True
+    assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+
+
+@pytest.mark.parametrize("mode", ["DEBUG", "TESTING"])
+def test_session_cookie_is_not_secure_in_debug_or_testing(tmp_path, monkeypatch, mode):
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+    assert _cookie_app(tmp_path, **{mode: True}).config["SESSION_COOKIE_SECURE"] is False
+
+
+@pytest.mark.parametrize(("value", "expected"), [("0", False), ("1", True)])
+def test_session_cookie_secure_can_be_set_by_environment(tmp_path, monkeypatch, value, expected):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", value)
+    assert _cookie_app(tmp_path).config["SESSION_COOKIE_SECURE"] is expected
+
+
+def test_secure_session_cookie_header_has_all_flags(tmp_path, monkeypatch):
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+    app = _cookie_app(tmp_path)
+    cookie = app.test_client().get("/login", base_url="https://localhost").headers["Set-Cookie"]
+    assert "Secure" in cookie and "HttpOnly" in cookie and "SameSite=Lax" in cookie
