@@ -52,6 +52,7 @@ ROUTES = {
     "add_department": ("POST", "/departments", 302, 403, 403, 400),
     "rename_department": ("POST", "/departments/1/rename", 302, 403, 403, 400),
     "delete_department": ("POST", "/departments/1/delete", 302, 403, 403, 302),
+    "time_off_calendar": ("GET", "/time-off/calendar", 302, 200, 200, 200),
     "view_time_off": ("GET", "/time-off", 302, 200, 200, 200),
     "request_time_off": ("GET", "/time-off/new", 302, 200, 200, 200),
     "decide_time_off": ("POST", "/time-off/999/decide", 302, 404, 404, 404),
