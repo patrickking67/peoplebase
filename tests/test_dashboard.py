@@ -7,6 +7,7 @@ import pytest
 from app import (
     Account,
     Department,
+    Document,
     Employee,
     Review,
     TimeOffRequest,
@@ -204,12 +205,20 @@ def test_seed_demo_fills_an_empty_database(app):
         assert [change.reason for change in jordan.compensation_history] == ["Promotion", "Hired"]
         assert jordan.manager.name == "Riley Example"
         assert db.session.scalar(db.select(db.func.count(Review.id))) == 12
+        assert sorted(d.audience for d in db.session.scalars(db.select(Document))) == ["employee", "hr", "manager"]
         parker = db.session.scalar(db.select(Employee).where(Employee.name == "Parker Example"))
         assert all(task.due_date is not None for task in parker.checklist("offboarding"))
         assert [(job.position, job.reason) for job in jordan.job_history] == [
             ("Senior Engineer", "Promotion"),
             ("Engineer", "Hired"),
         ]
+
+
+def test_the_demo_pdf_passes_the_upload_checks():
+    from app import DEMO_PDF
+    from documents import check_upload
+
+    assert check_upload("demo.pdf", DEMO_PDF) == ("pdf", None)
 
 
 def test_seed_demo_creates_fake_accounts_and_prints_their_password(app):
