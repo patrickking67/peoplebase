@@ -1859,12 +1859,12 @@ def seed_demo_data(today):
 
     # Skyler is the newest hire and still onboarding; Parker left and is mostly offboarded.
     now = utcnow()
+    people["Parker Example"].end_date = today - timedelta(days=45)
     for name, kind, finished in (("Skyler Example", "onboarding", 3), ("Parker Example", "offboarding", 4)):
         people[name].start_checklist(kind)
         for task in people[name].checklist(kind)[:finished]:
             task.completed_at = now
             task.completed_by = demo_email(DEMO_ADMIN)
-    people["Parker Example"].end_date = today - timedelta(days=45)
 
     # Two short made-up policies. Everyone has read the first; three people still owe the second.
     current = [employee for employee in people.values() if employee.status != "terminated"]
