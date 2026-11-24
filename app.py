@@ -1,3 +1,4 @@
+import calendar
 import csv
 import hmac
 import json
@@ -713,6 +714,54 @@ def create_app(test_config=None):
             requests=db.session.scalars(statement).all(),
             selected_status=status,
             today=date.today(),
+        )
+
+    @app.get("/time-off/calendar")
+    def time_off_calendar():
+        today = date.today()
+        year, month = parse_month(request.args.get("month"), today)
+        first = date(year, month, 1)
+        weeks = calendar.Calendar(firstweekday=0).monthdatescalendar(year, month)
+        statement = (
+            db.select(TimeOffRequest)
+            .where(
+                TimeOffRequest.status != "denied",
+                TimeOffRequest.start_date <= weeks[-1][-1],
+                TimeOffRequest.end_date >= weeks[0][0],
+            )
+            .order_by(TimeOffRequest.start_date, TimeOffRequest.id)
+        )
+        # Trust boundary: the scope comes from the signed-in account, never from the query string.
+        team = g.access.team_calendar_ids()
+        if team is not None:
+            statement = statement.where(TimeOffRequest.employee_id.in_(team))
+        days = {}
+        for item in db.session.scalars(statement):
+            detailed = g.access.can_see_leave_details(item.employee)
+            if item.status == "pending" and not detailed:
+                continue
+            day = max(item.start_date, weeks[0][0])
+            while day <= min(item.end_date, weeks[-1][-1]):
+                days.setdefault(day, []).append(
+                    {
+                        "name": item.employee.name,
+                        "id": item.employee.id if g.access.can_view_profile(item.employee) else None,
+                        "kind": item.kind_label if detailed else None,
+                        "pending": item.status == "pending",
+                    }
+                )
+                day += timedelta(days=1)
+        previous_month = (first - timedelta(days=1)).strftime("%Y-%m")
+        next_month = (first + timedelta(days=32)).replace(day=1).strftime("%Y-%m")
+        return render_template(
+            "time_off_calendar.html",
+            weeks=weeks,
+            days=days,
+            first=first,
+            today=today,
+            previous_month=previous_month,
+            next_month=next_month,
+            everyone=team is None,
         )
 
     @app.route("/time-off/new", methods=["GET", "POST"])
@@ -1589,6 +1638,14 @@ def reports_up_to(person, ancestor):
         seen.add(current.id)
         current = current.manager
     return False
+
+
+def parse_month(text_value, today):
+    """(year, month) from "YYYY-MM". Anything else, or a year outside 2000 to 2100, means this month."""
+    match = re.fullmatch(r"(\d{4})-(\d{2})", (text_value or "").strip())
+    if match and 2000 <= int(match.group(1)) <= 2100 and 1 <= int(match.group(2)) <= 12:
+        return int(match.group(1)), int(match.group(2))
+    return today.year, today.month
 
 
 def job_change_for(employee, effective_date, reason):
