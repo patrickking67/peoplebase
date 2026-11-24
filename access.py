@@ -126,6 +126,24 @@ class Access:
         """Kind and pending requests: the person, their managers and HR. Colleagues only see who is out."""
         return self.can_view_profile(employee)
 
+    # Documents
+
+    def can_read_document(self, document):
+        """HR reads everything. The person reads what is shared with them, and
+        their managers (direct or above) read only what is shared with managers."""
+        if self.is_admin:
+            return True
+        if self.is_self(document.employee):
+            return document.audience in {"employee", "manager"}
+        return document.audience == "manager" and self.manages(document.employee)
+
+    def can_upload_document(self, employee):
+        """HR for anyone, and a person for their own record."""
+        return self.is_admin or self.is_self(employee)
+
+    def can_delete_document(self, document):
+        return self.is_admin
+
     # Performance reviews
 
     def is_reviewer_of(self, review):
