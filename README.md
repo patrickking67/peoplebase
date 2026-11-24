@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickking67/peoplebase/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
-[![Tests: 586](https://img.shields.io/badge/tests-586-2546f0?style=flat)](#quality)
+[![Tests: 633](https://img.shields.io/badge/tests-633-2546f0?style=flat)](#quality)
 [![Project page](https://img.shields.io/badge/project%20page-live-2546f0?style=flat)](https://patrickking67.github.io/peoplebase/)
 
 <picture>
@@ -112,13 +112,13 @@ sequenceDiagram
 
 The data model (an `erDiagram`), the component view and the audit mechanism
 are in [docs/architecture.md](docs/architecture.md). The threat model, with
-21 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
+23 abuse cases and the test for each, is in [docs/security.md](docs/security.md).
 
 | Role | Sees | Can change |
 | --- | --- | --- |
-| Employee | Own record, pay, leave balances, checklist; the directory and org chart | Own time-off requests, own policy acknowledgements, own password, checklist tasks they own |
-| Manager | The same, plus records, time off and checklists of direct and indirect reports. Not their pay. | Approve or deny reports' time off, tick their checklist tasks |
-| HR admin | Everything, including pay, people who left, reports and the audit log | Records, departments, accounts and roles, policies |
+| Employee | Own record, pay, leave balances, checklist, reviews; the directory and org chart | Own time-off requests, own policy acknowledgements, own password, checklist tasks they own, own self review |
+| Manager | The same, plus records, time off and checklists of direct and indirect reports. Not their pay. | Approve or deny reports' time off, tick their checklist tasks, write direct reports' reviews |
+| HR admin | Everything, including pay, people who left, reports, reviews and the audit log | Records, departments, accounts and roles, policies, review cycles |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/assets/approvals-dark.webp">
@@ -134,7 +134,7 @@ More screens: [org chart](site/assets/org-chart-light.webp),
 
 | Signal | Current state |
 | --- | --- |
-| Tests | 586 tests in `pytest`, each on a fresh SQLite database |
+| Tests | 633 tests in `pytest`, each on a fresh SQLite database |
 | Line coverage | 99% of `app.py`, `access.py`, `models.py`, `leave.py` and `reports.py`, measured once on 2026-11-12 with coverage.py (not enforced in CI) |
 | CI | `./scripts/check.sh` on Python 3.11, 3.12 and 3.13 for every pull request and push to `main` |
 | Lint and repo checks | `ruff`, plus checks that the docs quote the real test count and contain no em dashes or emoji |
@@ -155,6 +155,9 @@ More screens: [org chart](site/assets/org-chart-light.webp),
   Each task has an owner (HR, manager or employee) and a due date counted from
   the start date or last day, and overdue tasks are flagged.
   Marking someone as left records their last day and turns off their account.
+- **Performance reviews.** Review cycles opened by HR: a self review, then the
+  direct manager's review, released to the person when HR closes the cycle.
+  Each half is written once. Skip-level managers do not read them.
 - **Policies.** Immutable published text; everyone acknowledges for
   themselves and a revision asks again.
 - **Reports.** Twelve months of headcount, hires, leavers and attrition

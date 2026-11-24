@@ -9,6 +9,10 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- Performance review cycles: HR opens a cycle, each person writes a self
+  review, their direct manager writes a review, and HR closes the cycle to
+  release the manager review. Reading another person's review is audited.
+  Migration 0008. Abuse cases 22 and 23.
 - A team calendar of time off by month. Each person sees their own team;
   colleagues see who is out without the kind of leave. Abuse case 21.
 - Checklist tasks have an owner (HR, manager or employee) and a due date counted
@@ -41,7 +45,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 21 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 23 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people
