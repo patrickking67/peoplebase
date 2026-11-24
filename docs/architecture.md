@@ -37,6 +37,7 @@ erDiagram
     EMPLOYEE ||--o{ EMPLOYEE : manages
     EMPLOYEE ||--o| ACCOUNT : "signs in as"
     EMPLOYEE ||--o{ COMPENSATION_CHANGE : "pay history"
+    EMPLOYEE ||--o{ JOB_CHANGE : "job history"
     EMPLOYEE ||--o{ TIME_OFF_REQUEST : requests
     EMPLOYEE ||--o{ CHECKLIST_TASK : "on and offboarding"
     EMPLOYEE ||--o{ ACKNOWLEDGEMENT : signs
@@ -68,6 +69,15 @@ erDiagram
         int employee_id FK
         string position
         decimal salary
+        date effective_date
+        string reason
+    }
+    JOB_CHANGE {
+        int id PK
+        int employee_id FK
+        string position
+        string department_name
+        string manager_name
         date effective_date
         string reason
     }

@@ -37,6 +37,7 @@ until HR gives the account the manager role.
 | --- | --- | --- | --- |
 | Directory and org chart: name, title, department, manager of current staff | Yes | Yes | Yes, plus people who left, status and salary |
 | Profile page | Own | Own and reports | Everyone |
+| Job history: title, department, manager over time | Own | Own and reports | Everyone |
 | Salary and compensation history | Own | Own | Everyone |
 | Time off and leave balances: view | Own | Own and reports | Everyone |
 | Time off: request | Self | Self | Anyone |
@@ -66,7 +67,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
 `tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
 `tests/test_policies.py` (15, 16), `tests/test_reports.py` (7) and
-`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18).
+`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18) and `tests/test_job_history.py` (19).
 
 | # | Abuse case | Control |
 | --- | --- | --- |
@@ -88,6 +89,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 | 16 | **Script injection in stored text.** Put markup in a name, note or policy body. | Jinja autoescaping everywhere, policy text is shown as plain text, and the Content-Security-Policy forbids inline script. |
 | 17 | **Cookie sniffing over plain HTTP.** Read the session cookie off a network path because it was sent without TLS. | The session cookie is `Secure` by default, `HttpOnly` and `SameSite=Lax`. Only debug and testing runs, or an explicit `SESSION_COOKIE_SECURE=0`, turn `Secure` off. |
 | 18 | **Quiet browsing by an insider.** Open colleagues' records, the directory with pay or the audit log itself and leave no trace. | Reading another person's profile, HR's directory view and every audit log view write a `view.*` entry with who, whom and whether pay was shown. Reading your own record is not logged. Refused reads answer 404 and write nothing. The entries sit in the same append-only table as every other entry. |
+| 19 | **Forging or reading job history.** Post `position`, `department_id`, `manager_id` or a reason for yourself, your report or a stranger to write a promotion, or open someone else's history by id. | Job history rows are created only by the HR-only record handlers, with the date and reason validated, and are derived from the employee row on the server. The app has no route to edit or delete a row. A non-HR post gets 403 and changes nothing. The history is part of the profile page, so it follows the profile rule: own, reports, or HR; anyone else gets 404. |
 
 ## What this does not cover
 
