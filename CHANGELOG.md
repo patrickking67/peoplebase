@@ -9,6 +9,8 @@ earlier entries are reconstructed from the Git history.
 
 ### Added
 
+- Sensitive reads are audited: another person's record, HR's directory view
+  and every audit log view. Abuse case 18.
 - Sign-in with three roles: employee, manager and HR admin. Passwords are
   hashed with Argon2id (argon2-cffi). Sessions are cleared at sign-in, can be
   revoked through a per-account nonce and end after 12 hours.
@@ -31,7 +33,7 @@ earlier entries are reconstructed from the Git history.
   reporting tree.
 - Versioned schema migrations with Alembic through Flask-Migrate, tested from
   every earlier schema shape on SQLite and PostgreSQL.
-- `docs/security.md`: trust boundaries, access rules and 17 abuse cases, each
+- `docs/security.md`: trust boundaries, access rules and 18 abuse cases, each
   with a test.
 - Departments (add, rename, delete), reporting lines with an org chart,
   employment status, compensation history, time-off requests, a people

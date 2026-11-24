@@ -46,7 +46,7 @@ until HR gives the account the manager role.
 | Policies: publish, see who has not acknowledged | No | No | Yes |
 | Add, edit, delete employees; manage departments | No | No | Yes |
 | Accounts, roles, password resets | No | No | Yes |
-| Audit log | No | No | Yes |
+| Audit log (reading it is itself logged) | No | No | Yes |
 | Directory CSV (includes salary) | No | No | Yes |
 | Headcount and attrition report and its CSV | No | Own reporting tree | Whole company |
 
@@ -66,7 +66,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 1, 2, 5, 6, 7, 15), `tests/test_auth.py` (3, 4, 8, 9, 10, 11, 12, 14),
 `tests/test_accounts.py` (5, 10), `tests/test_audit.py` (13),
 `tests/test_policies.py` (15, 16), `tests/test_reports.py` (7) and
-`tests/test_security.py` (17).
+`tests/test_security.py` (17) and `tests/test_audit_reads.py` (18).
 
 | # | Abuse case | Control |
 | --- | --- | --- |
@@ -87,6 +87,7 @@ the server does about it. The tests live in `tests/test_access.py` (cases
 | 15 | **Acting for someone else.** Acknowledge a policy or request leave in a colleague's name. | Acknowledgements and non-HR leave requests are always recorded against the signed-in person's own record. |
 | 16 | **Script injection in stored text.** Put markup in a name, note or policy body. | Jinja autoescaping everywhere, policy text is shown as plain text, and the Content-Security-Policy forbids inline script. |
 | 17 | **Cookie sniffing over plain HTTP.** Read the session cookie off a network path because it was sent without TLS. | The session cookie is `Secure` by default, `HttpOnly` and `SameSite=Lax`. Only debug and testing runs, or an explicit `SESSION_COOKIE_SECURE=0`, turn `Secure` off. |
+| 18 | **Quiet browsing by an insider.** Open colleagues' records, the directory with pay or the audit log itself and leave no trace. | Reading another person's profile, HR's directory view and every audit log view write a `view.*` entry with who, whom and whether pay was shown. Reading your own record is not logged. Refused reads answer 404 and write nothing. The entries sit in the same append-only table as every other entry. |
 
 ## What this does not cover
 
